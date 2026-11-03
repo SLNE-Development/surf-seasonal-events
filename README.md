@@ -1,1 +1,1 @@
-# aurf-gift
+# surf-seasonal-events
