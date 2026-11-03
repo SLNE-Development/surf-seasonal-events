@@ -1,0 +1,12 @@
+package dev.slne.surf.seasonalevents.paper
+
+import com.github.shynixn.mccoroutine.folia.SuspendingJavaPlugin
+import org.bukkit.plugin.java.JavaPlugin
+
+/**
+ * Paper entry point of surf-seasonal-events.
+ */
+class PaperMain : SuspendingJavaPlugin()
+
+/** The running plugin instance. */
+val plugin get() = JavaPlugin.getPlugin(PaperMain::class.java)
