@@ -6,9 +6,13 @@ import kotlinx.serialization.Serializable
 /** Outcome of marking a block as an event object. */
 @Serializable
 sealed interface MarkResult {
-    /** The block is now a marker; the caller removes the real block. */
+    /**
+     * The block is now a marker; the caller removes the real block.
+     *
+     * @param markerCount markers of the event including this one
+     */
     @Serializable
-    data class Success(val marker: EventMarker) : MarkResult
+    data class Success(val marker: EventMarker, val markerCount: Int, val markerLimit: Int) : MarkResult
 
     /** The event already has [limit] markers. */
     @Serializable

@@ -15,6 +15,7 @@ import dev.slne.surf.api.core.messages.adventure.buildText
 import dev.slne.surf.api.core.messages.adventure.lifetime
 import dev.slne.surf.api.core.messages.adventure.sendText
 import dev.slne.surf.api.paper.command.executors.anyExecutorSuspend
+import dev.slne.surf.api.paper.command.executors.playerExecutorSuspend
 import dev.slne.surf.seasonalevents.api.event.EventMode
 import dev.slne.surf.seasonalevents.api.event.SeasonalEvent
 import dev.slne.surf.seasonalevents.core.client.rpc.RpcOutcome
@@ -99,6 +100,22 @@ fun seasonalEventsCommand() = commandTree("seasonalevents") {
         }
     }
 
+    // edit <event>: toggles edit mode and the marker tool
+    literalArgument("edit") {
+        withPermission(SeasonalEventsPermissions.COMMAND_EDIT)
+        argument(SeasonalEventArgument("event")) {
+            playerExecutorSuspend { player, args -> player.toggleEditMode(args.awaiting("event")) }
+        }
+    }
+
+    // restore <event>: puts all real blocks back (asks for confirmation)
+    literalArgument("restore") {
+        withPermission(SeasonalEventsPermissions.COMMAND_RESTORE)
+        argument(SeasonalEventArgument("event")) {
+            anyExecutorSuspend { sender, args -> sender.confirmRestore(args.awaiting("event")) }
+        }
+    }
+
     literalArgument("stop") {
         withPermission(SeasonalEventsPermissions.COMMAND_STOP)
         anyExecutorSuspend { sender, _ -> sender.confirmStop() }
@@ -119,7 +136,7 @@ fun seasonalEventsCommand() = commandTree("seasonalevents") {
 }
 
 /** Runs an RPC call and sends its message, or the "unavailable" message if the microservice is down. */
-private suspend fun <T> Audience.reply(call: suspend () -> T, message: (T) -> Component) {
+internal suspend fun <T> Audience.reply(call: suspend () -> T, message: (T) -> Component) {
     when (val outcome = rpcCall(call)) {
         is RpcOutcome.Ok -> sendMessage(message(outcome.value))
         is RpcOutcome.Unavailable -> sendMessage(unavailableMessage())
@@ -137,7 +154,7 @@ private fun parseEnd(args: CommandArguments): Instant? = try {
  * Asks for confirmation with a clickable `[HIER]`. The click works once, within one minute, and only
  * for someone holding [permission]; [action] then runs on the plugin scope.
  */
-private fun Audience.confirm(question: String, permission: String, action: suspend Audience.() -> Unit) = sendText {
+internal fun Audience.confirm(question: String, permission: String, action: suspend Audience.() -> Unit) = sendText {
     appendWarningPrefix()
     warning("$question? Das kann nicht rückgängig gemacht werden. ")
     append {

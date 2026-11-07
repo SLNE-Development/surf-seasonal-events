@@ -3,7 +3,9 @@ package dev.slne.surf.seasonalevents.paper
 import com.github.retrooper.packetevents.PacketEvents
 import com.github.retrooper.packetevents.event.PacketListenerPriority
 import com.github.shynixn.mccoroutine.folia.SuspendingJavaPlugin
+import dev.slne.surf.seasonalevents.paper.listener.FakeBlockClickListener
 import dev.slne.surf.seasonalevents.paper.listener.FakeBlockPacketListener
+import dev.slne.surf.seasonalevents.paper.listener.MarkerToolListener
 import dev.slne.surf.api.paper.extensions.pluginManager
 import dev.slne.surf.seasonalevents.core.client.rabbit.RabbitService
 import dev.slne.surf.seasonalevents.paper.command.seasonalEventsCommand
@@ -24,7 +26,9 @@ class PaperMain : SuspendingJavaPlugin() {
         pluginManager.registerEvents(PlayerConnectionListener, this)
         pluginManager.registerEvents(ChunkLoadListener, this)
         pluginManager.registerEvents(MarkerProtectionListener, this)
+        pluginManager.registerEvents(MarkerToolListener, this)
         PacketEvents.getAPI().eventManager.registerListener(FakeBlockPacketListener, PacketListenerPriority.HIGH)
+        PacketEvents.getAPI().eventManager.registerListener(FakeBlockClickListener, PacketListenerPriority.NORMAL)
 
         // Also covers a reload with players online.
         ViewService.reloadAll()

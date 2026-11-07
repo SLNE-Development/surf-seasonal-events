@@ -192,7 +192,7 @@ class SerializationRoundtripTest {
     @Test
     fun `every mark result case survives roundtrip`() {
         val cases: List<MarkResult> = listOf(
-            MarkResult.Success(marker),
+            MarkResult.Success(marker, markerCount = 3, markerLimit = 4),
             MarkResult.LimitReached(24),
             MarkResult.AlreadyMarked,
             MarkResult.EventEnded,
@@ -204,7 +204,7 @@ class SerializationRoundtripTest {
     @Test
     fun `every unmark result case survives roundtrip`() {
         val cases: List<UnmarkResult> = listOf(
-            UnmarkResult.Success(marker),
+            UnmarkResult.Success(marker, markerCount = 2, markerLimit = 4),
             UnmarkResult.NotMarked,
         )
         cases.forEach { assertEquals(it, roundtrip<UnmarkResult>(it)) }

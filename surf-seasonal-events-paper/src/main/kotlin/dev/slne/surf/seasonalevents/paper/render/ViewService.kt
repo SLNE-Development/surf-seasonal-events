@@ -60,6 +60,18 @@ object ViewService {
         Bukkit.getOnlinePlayers().forEach { reload(it) }
     }
 
+    /**
+     * After a marker of [eventId] was added or removed: reloads the protected positions and the view of
+     * everyone it can affect, i.e. staff editing that event and, if it is running, all players.
+     */
+    suspend fun reloadAfterMarkerChange(eventId: ULong) {
+        reloadProtected()
+        val activeId = (rpcCall { eventRpc.getActiveEvent() } as? RpcOutcome.Ok)?.value?.id
+        Bukkit.getOnlinePlayers()
+            .filter { activeId == eventId || editing[it.uniqueId] == eventId }
+            .forEach { reload(it) }
+    }
+
     private suspend fun loadMarkers(player: UUID): List<EventMarker>? {
         val eventId = editing[player]
         val outcome = if (eventId != null) {

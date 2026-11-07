@@ -25,13 +25,15 @@ object MarkerRpcServiceImpl : MarkerRpcService {
     ): MarkResult = suspendTransaction {
         val event = EventRepository.findById(eventId) ?: return@suspendTransaction MarkResult.NotFound
 
+        val markerCount = MarkerRepository.count(eventId)
         MarkerRules.checkMark(
             event = event,
-            markerCount = MarkerRepository.count(eventId),
+            markerCount = markerCount,
             positionTaken = MarkerRepository.findByPosition(position) != null,
         )?.let { return@suspendTransaction it }
 
-        MarkResult.Success(MarkerRepository.insert(eventId, position, blockData, skullTexture, markedBy))
+        val marker = MarkerRepository.insert(eventId, position, blockData, skullTexture, markedBy)
+        MarkResult.Success(marker, markerCount = markerCount + 1, markerLimit = event.markerLimit)
     }
 
     override suspend fun unmark(position: MarkerPosition): UnmarkResult = suspendTransaction {
@@ -39,7 +41,11 @@ object MarkerRpcServiceImpl : MarkerRpcService {
 
         // Assignments to the marker are removed by ON DELETE CASCADE.
         MarkerRepository.delete(marker.id)
-        UnmarkResult.Success(marker)
+        UnmarkResult.Success(
+            marker = marker,
+            markerCount = MarkerRepository.count(marker.eventId),
+            markerLimit = EventRepository.findById(marker.eventId)?.markerLimit ?: 0,
+        )
     }
 
     override suspend fun findByEvent(eventId: ULong): List<EventMarker> = MarkerRepository.findByEvent(eventId)
