@@ -22,6 +22,7 @@ import dev.slne.surf.seasonalevents.core.client.rpc.RpcOutcome
 import dev.slne.surf.seasonalevents.core.client.rpc.eventRpc
 import dev.slne.surf.seasonalevents.core.client.rpc.rpcCall
 import dev.slne.surf.seasonalevents.paper.command.argument.SeasonalEventArgument
+import dev.slne.surf.seasonalevents.paper.gui.openLootOverview
 import dev.slne.surf.seasonalevents.paper.plugin
 import dev.slne.surf.seasonalevents.paper.render.ViewService
 import dev.slne.surf.seasonalevents.paper.time.DateArgumentParser
@@ -96,6 +97,24 @@ fun seasonalEventsCommand() = commandTree("seasonalevents") {
                     val endsAt = parseEnd(args)
                     sender.reply({ eventRpc.setEnd(event.id, endsAt) }) { it.message() }
                 }
+            }
+        }
+    }
+
+    // loot <event>: opens the loot package GUI
+    literalArgument("loot") {
+        withPermission(SeasonalEventsPermissions.COMMAND_LOOT)
+        argument(SeasonalEventArgument("event")) {
+            playerExecutorSuspend { player, args -> openLootOverview(player, args.awaiting("event")) }
+        }
+    }
+
+    // copyloot <from> <to>: copies all packages, e.g. to reuse last year's loot
+    literalArgument("copyloot") {
+        withPermission(SeasonalEventsPermissions.COMMAND_LOOT)
+        argument(SeasonalEventArgument("from")) {
+            argument(SeasonalEventArgument("to")) {
+                anyExecutorSuspend { sender, args -> sender.copyLoot(args.awaiting("from"), args.awaiting("to")) }
             }
         }
     }
