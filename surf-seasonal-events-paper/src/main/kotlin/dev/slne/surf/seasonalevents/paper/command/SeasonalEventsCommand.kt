@@ -22,6 +22,7 @@ import dev.slne.surf.seasonalevents.core.client.rpc.eventRpc
 import dev.slne.surf.seasonalevents.core.client.rpc.rpcCall
 import dev.slne.surf.seasonalevents.paper.command.argument.SeasonalEventArgument
 import dev.slne.surf.seasonalevents.paper.plugin
+import dev.slne.surf.seasonalevents.paper.render.ViewService
 import dev.slne.surf.seasonalevents.paper.time.DateArgumentParser
 import dev.slne.surf.seasonalevents.paper.util.permission.SeasonalEventsPermissions
 import net.kyori.adventure.audience.Audience
@@ -110,6 +111,7 @@ fun seasonalEventsCommand() = commandTree("seasonalevents") {
                 val event: SeasonalEvent = args.awaiting("event")
                 sender.confirm("Event ${event.name} mit allen Markern, Paketen und Fortschritten löschen", SeasonalEventsPermissions.COMMAND_DELETE) {
                     reply({ eventRpc.delete(event.id) }) { it.message(event.name) }
+                    ViewService.reloadAll()
                 }
             }
         }
@@ -156,8 +158,10 @@ private suspend fun Audience.create(args: CommandArguments, dailyLimit: Int) {
     reply({ eventRpc.create(name, mode, markerLimit, dailyLimit) }) { it.message(name) }
 }
 
-private suspend fun Audience.start(event: SeasonalEvent, endsAt: Instant?) =
+private suspend fun Audience.start(event: SeasonalEvent, endsAt: Instant?) {
     reply({ eventRpc.start(event.id, endsAt) }) { it.message() }
+    ViewService.reloadAll()
+}
 
 private suspend fun Audience.confirmStop() {
     val active = when (val outcome = rpcCall { eventRpc.getActiveEvent() }) {
@@ -172,5 +176,6 @@ private suspend fun Audience.confirmStop() {
             return@confirm sendMessage(errorMessage("Das Event ${active.name} läuft nicht mehr."))
         }
         reply({ eventRpc.stop() }) { it.message() }
+        ViewService.reloadAll()
     }
 }
