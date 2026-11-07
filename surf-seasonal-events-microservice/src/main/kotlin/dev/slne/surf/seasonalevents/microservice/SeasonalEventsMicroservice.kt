@@ -8,7 +8,11 @@ import dev.slne.surf.microservice.api.microservice.Microservice
 import dev.slne.surf.rabbitmq.api.ServerRabbitMQApi
 import dev.slne.surf.seasonalevents.core.SeasonalEventsSerializerModule
 import dev.slne.surf.seasonalevents.core.rpc.EventRpcService
+import dev.slne.surf.seasonalevents.core.rpc.LootRpcService
+import dev.slne.surf.seasonalevents.core.rpc.MarkerRpcService
 import dev.slne.surf.seasonalevents.microservice.rpc.EventRpcServiceImpl
+import dev.slne.surf.seasonalevents.microservice.rpc.LootRpcServiceImpl
+import dev.slne.surf.seasonalevents.microservice.rpc.MarkerRpcServiceImpl
 import dev.slne.surf.seasonalevents.microservice.db.table.CollectionsTable
 import dev.slne.surf.seasonalevents.microservice.db.table.DailyAssignmentsTable
 import dev.slne.surf.seasonalevents.microservice.db.table.EventMarkersTable
@@ -36,6 +40,8 @@ class SeasonalEventsMicroservice : Microservice() {
         createTables()
 
         rabbitApi.registerRpcService<EventRpcService>(EventRpcServiceImpl)
+        rabbitApi.registerRpcService<MarkerRpcService>(MarkerRpcServiceImpl)
+        rabbitApi.registerRpcService<LootRpcService>(LootRpcServiceImpl)
         rabbitApi.freezeAndConnect()
     }
 
