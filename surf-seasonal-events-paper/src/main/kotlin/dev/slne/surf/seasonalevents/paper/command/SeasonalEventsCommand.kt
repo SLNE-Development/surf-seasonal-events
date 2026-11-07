@@ -20,6 +20,7 @@ import dev.slne.surf.seasonalevents.api.event.EventMode
 import dev.slne.surf.seasonalevents.api.event.SeasonalEvent
 import dev.slne.surf.seasonalevents.core.client.rpc.RpcOutcome
 import dev.slne.surf.seasonalevents.core.client.rpc.eventRpc
+import dev.slne.surf.seasonalevents.core.client.rpc.progressRpc
 import dev.slne.surf.seasonalevents.core.client.rpc.rpcCall
 import dev.slne.surf.seasonalevents.paper.command.argument.SeasonalEventArgument
 import dev.slne.surf.seasonalevents.paper.gui.openLootOverview
@@ -30,12 +31,17 @@ import dev.slne.surf.seasonalevents.paper.util.permission.SeasonalEventsPermissi
 import net.kyori.adventure.audience.Audience
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.TextDecoration
+import dev.slne.surf.seasonalevents.api.progress.PlayerStatus
+import org.bukkit.entity.Player
 import java.time.Instant
 import kotlin.time.Duration.Companion.minutes
 
 /** `/seasonalevents`: staff commands to manage seasonal events. Messages live in `EventMessages.kt`. */
 fun seasonalEventsCommand() = commandTree("seasonalevents") {
     withPermission(SeasonalEventsPermissions.COMMAND_SEASONAL_EVENTS)
+
+    // Without a subcommand: the player's own progress in the active event.
+    playerExecutorSuspend { player, _ -> player.showStatus() }
 
     literalArgument("list") {
         withPermission(SeasonalEventsPermissions.COMMAND_LIST)
@@ -213,5 +219,19 @@ private suspend fun Audience.confirmStop() {
         }
         reply({ eventRpc.stop() }) { it.message() }
         ViewService.reloadAll()
+    }
+}
+
+/**
+ * Shows the player's progress. If the event has just ended (the microservice ends it lazily on this
+ * call), the player's blocks are removed right away instead of on the next ticker run.
+ */
+private suspend fun Player.showStatus() {
+    val outcome = rpcCall { progressRpc.getStatus(uniqueId) }
+    if (outcome !is RpcOutcome.Ok) return sendMessage(unavailableMessage())
+
+    sendMessage(outcome.value.message())
+    if (outcome.value == PlayerStatus.NoActiveEvent && ViewService.cache.markers(uniqueId).isNotEmpty()) {
+        ViewService.reload(this)
     }
 }

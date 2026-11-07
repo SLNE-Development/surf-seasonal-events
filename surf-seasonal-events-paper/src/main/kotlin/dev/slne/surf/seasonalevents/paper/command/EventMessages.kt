@@ -115,7 +115,15 @@ fun UpdateEventResult.message(): Component = when (this) {
 }
 
 fun StopEventResult.message(): Component = when (this) {
-    is StopEventResult.Success -> successMessage(event.name, "wurde beendet.")
+    is StopEventResult.Success -> buildText {
+        append(successMessage(event.name, "wurde beendet."))
+        // Marker positions stay reserved until the real blocks are back.
+        appendNewInfoPrefixedLine {
+            info("Die Blöcke sind ausgeblendet. Setze sie mit ")
+            variableValue("/seasonalevents restore ${event.name}")
+            info(" zurück, erst dann ist dort wieder Bauen möglich.")
+        }
+    }
     StopEventResult.NoActiveEvent -> errorMessage("Es läuft gerade kein Event.")
 }
 
