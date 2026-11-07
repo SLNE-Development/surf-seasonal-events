@@ -10,6 +10,8 @@ import dev.slne.surf.seasonalevents.core.SeasonalEventsSerializerModule
 import dev.slne.surf.seasonalevents.core.rpc.EventRpcService
 import dev.slne.surf.seasonalevents.core.rpc.LootRpcService
 import dev.slne.surf.seasonalevents.core.rpc.MarkerRpcService
+import dev.slne.surf.seasonalevents.core.rpc.ProgressRpcService
+import dev.slne.surf.seasonalevents.microservice.rpc.ProgressRpcServiceImpl
 import dev.slne.surf.seasonalevents.microservice.rpc.EventRpcServiceImpl
 import dev.slne.surf.seasonalevents.microservice.rpc.LootRpcServiceImpl
 import dev.slne.surf.seasonalevents.microservice.rpc.MarkerRpcServiceImpl
@@ -42,6 +44,7 @@ class SeasonalEventsMicroservice : Microservice() {
         rabbitApi.registerRpcService<EventRpcService>(EventRpcServiceImpl)
         rabbitApi.registerRpcService<MarkerRpcService>(MarkerRpcServiceImpl)
         rabbitApi.registerRpcService<LootRpcService>(LootRpcServiceImpl)
+        rabbitApi.registerRpcService<ProgressRpcService>(ProgressRpcServiceImpl())
         rabbitApi.freezeAndConnect()
     }
 

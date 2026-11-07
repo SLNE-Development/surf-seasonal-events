@@ -74,4 +74,21 @@ class PackagePickerTest {
     fun `no packages gives null`() {
         assertNull(PackagePicker.pick(EventMode.DAILY, emptyList(), emptySet(), today, Random(1)))
     }
+
+    @Test
+    fun `daily candidates are only today's package while it is open`() {
+        assertEquals(listOf(todays), PackagePicker.candidates(EventMode.DAILY, all, emptySet(), today))
+        assertEquals(
+            listOf(randomA, randomB),
+            PackagePicker.candidates(EventMode.DAILY, all, setOf(todays.id), today),
+        )
+    }
+
+    @Test
+    fun `collect candidates are all packages not received`() {
+        assertEquals(
+            listOf(todays, christmasEve, randomB),
+            PackagePicker.candidates(EventMode.COLLECT, all, setOf(randomA.id), today),
+        )
+    }
 }

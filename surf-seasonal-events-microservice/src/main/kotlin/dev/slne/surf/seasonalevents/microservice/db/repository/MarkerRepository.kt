@@ -51,6 +51,13 @@ object MarkerRepository {
         }.single().toMarker()
     }
 
+    suspend fun findById(id: ULong): EventMarker? = suspendTransaction {
+        EventMarkersTable.selectAll()
+            .where { EventMarkersTable.id eq id }
+            .singleOrNull()
+            ?.toMarker()
+    }
+
     /** Returns the marker at [position], regardless of which event it belongs to. */
     suspend fun findByPosition(position: MarkerPosition): EventMarker? = suspendTransaction {
         EventMarkersTable.selectAll()

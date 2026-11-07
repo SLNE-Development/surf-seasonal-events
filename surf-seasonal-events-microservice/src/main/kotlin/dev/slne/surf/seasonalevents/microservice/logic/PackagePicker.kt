@@ -24,13 +24,24 @@ object PackagePicker {
         receivedIds: Set<ULong>,
         today: LocalDate,
         random: Random,
-    ): LootPackage? {
+    ): LootPackage? = candidates(mode, packages, receivedIds, today).randomOrNull(random)
+
+    /**
+     * Returns every package [pick] may choose from, following the same rules. Used to check that a
+     * previewed package can still be given.
+     */
+    fun candidates(
+        mode: EventMode,
+        packages: List<LootPackage>,
+        receivedIds: Set<ULong>,
+        today: LocalDate,
+    ): List<LootPackage> {
         val open = packages.filter { it.id !in receivedIds }
 
         return when (mode) {
-            EventMode.COLLECT -> open.randomOrNull(random)
-            EventMode.DAILY -> open.firstOrNull { it.fixedDay == today }
-                ?: open.filter { it.fixedDay == null }.randomOrNull(random)
+            EventMode.COLLECT -> open
+            EventMode.DAILY -> open.filter { it.fixedDay == today }
+                .ifEmpty { open.filter { it.fixedDay == null } }
         }
     }
 }
