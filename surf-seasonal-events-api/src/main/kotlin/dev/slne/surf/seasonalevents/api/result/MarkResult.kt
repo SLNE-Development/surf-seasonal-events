@@ -22,6 +22,13 @@ sealed interface MarkResult {
     @Serializable
     data object AlreadyMarked : MarkResult
 
+    /**
+     * The `COLLECT` event is running and would then have more markers than filled packages;
+     * fill another package first.
+     */
+    @Serializable
+    data class NotEnoughPackages(val filled: Int, val needed: Int) : MarkResult
+
     /** The event has ended; markers can no longer be added. */
     @Serializable
     data object EventEnded : MarkResult

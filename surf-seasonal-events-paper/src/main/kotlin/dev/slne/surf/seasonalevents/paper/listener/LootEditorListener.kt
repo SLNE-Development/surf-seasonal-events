@@ -6,9 +6,12 @@ import dev.slne.surf.seasonalevents.paper.gui.supportsFixedDay
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
+import org.bukkit.event.inventory.InventoryAction
 import org.bukkit.event.inventory.InventoryClickEvent
 import org.bukkit.event.inventory.InventoryCloseEvent
 import org.bukkit.event.inventory.InventoryDragEvent
+import org.bukkit.inventory.Inventory
+import org.bukkit.inventory.ItemStack
 
 /** Locks row 6 of the loot editor, handles its buttons and saves the package when it is closed. */
 object LootEditorListener : Listener {
@@ -18,7 +21,18 @@ object LootEditorListener : Listener {
     @EventHandler
     fun onClick(event: InventoryClickEvent) {
         val holder = event.view.topInventory.holder as? LootEditor.Holder ?: return
-        if (event.rawSlot !in buttonSlots) return
+
+        if (event.rawSlot !in buttonSlots) {
+            // Clicks elsewhere could still pull a button out (double click collects equal items to the
+            // cursor) or push an item onto a button (shift click merges into equal stacks).
+            val moved = when (event.action) {
+                InventoryAction.COLLECT_TO_CURSOR -> event.cursor
+                InventoryAction.MOVE_TO_OTHER_INVENTORY -> event.currentItem
+                else -> null
+            }
+            if (moved != null && event.view.topInventory.matchesButton(moved)) event.isCancelled = true
+            return
+        }
         event.isCancelled = true
 
         holder.afterClose = when (event.rawSlot) {
@@ -42,4 +56,8 @@ object LootEditorListener : Listener {
         val player = event.player as? Player ?: return
         LootEditor.saveAndContinue(player, holder)
     }
+
+    /** Whether [item] stacks with any button or filler of the editor's last row. */
+    private fun Inventory.matchesButton(item: ItemStack): Boolean =
+        !item.isEmpty && buttonSlots.any { getItem(it)?.isSimilar(item) == true }
 }

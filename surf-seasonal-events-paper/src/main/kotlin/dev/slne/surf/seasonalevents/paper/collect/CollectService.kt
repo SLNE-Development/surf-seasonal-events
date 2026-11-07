@@ -33,14 +33,24 @@ object CollectService {
     /** Players with a click in progress; further clicks are ignored until it is done. */
     private val busy = ConcurrentHashMap.newKeySet<UUID>()
 
+    /** Throttles clicks that would be answered right away, e.g. "not yours" or "already collected". */
+    private val cooldown = ClickCooldown()
+
     /** Handles a click on [marker]; can be called from any thread. */
     suspend fun handleClick(player: Player, marker: EventMarker) {
+        if (!cooldown.tryAcquire(player.uniqueId)) return
         if (!busy.add(player.uniqueId)) return
         try {
             collect(player, marker)
         } finally {
             busy.remove(player.uniqueId)
         }
+    }
+
+    /** Forgets everything about [player] when they leave. */
+    fun forget(player: UUID) {
+        cooldown.forget(player)
+        busy.remove(player)
     }
 
     private suspend fun collect(player: Player, marker: EventMarker) {

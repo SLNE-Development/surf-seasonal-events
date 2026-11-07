@@ -2,17 +2,12 @@ package dev.slne.surf.seasonalevents.paper.command
 
 import dev.slne.surf.api.core.messages.adventure.buildText
 import dev.slne.surf.api.core.messages.builder.SurfComponentBuilder
-import dev.slne.surf.api.core.util.dateTimeFormatter
 import dev.slne.surf.seasonalevents.api.event.SeasonalEvent
 import dev.slne.surf.seasonalevents.api.progress.PlayerStatus
 import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.minimessage.MiniMessage
 import org.bukkit.Bukkit
-import java.time.ZoneId
 
 // What `/seasonalevents` without a subcommand shows a player.
-
-private val berlinDateTime = dateTimeFormatter.withZone(ZoneId.of("Europe/Berlin"))
 
 fun PlayerStatus.message(): Component = when (this) {
     PlayerStatus.NoActiveEvent -> buildText {
@@ -53,12 +48,12 @@ private fun statusMessage(
     body: SurfComponentBuilder.() -> Unit,
 ) = buildText {
     appendInfoPrefix()
-    append(MiniMessage.miniMessage().deserialize(event.displayName))
+    append(event.displayNameComponent())
     appendNewInfoPrefixedLine(body)
     event.endsAt?.let { endsAt ->
         appendNewInfoPrefixedLine {
             info("Endet am ")
-            variableValue(berlinDateTime.format(endsAt))
+            variableValue(endsAt.formatted())
             info(".")
         }
     }

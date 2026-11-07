@@ -1,6 +1,7 @@
 package dev.slne.surf.seasonalevents.paper.command
 
 import dev.slne.surf.api.core.messages.adventure.buildText
+import dev.slne.surf.seasonalevents.api.event.EventMode
 import dev.slne.surf.seasonalevents.api.marker.MarkerPosition
 import dev.slne.surf.seasonalevents.api.result.MarkResult
 import dev.slne.surf.seasonalevents.api.result.RestoreResult
@@ -25,10 +26,18 @@ private fun markerMessage(action: String, count: Int, limit: Int, position: Mark
 fun MarkResult.message(): Component = when (this) {
     is MarkResult.Success -> markerMessage("Block markiert", markerCount, markerLimit, marker.position)
     is MarkResult.LimitReached -> errorMessage("Das Marker-Limit ist erreicht ($limit/$limit). Entmarkiere zuerst einen Block.")
+    is MarkResult.NotEnoughPackages ->
+        packageShortageMessage("Das laufende Event hätte dann mehr Blöcke als Pakete:", filled, needed, EventMode.COLLECT) {
+            error("Befülle zuerst ein weiteres Paket, dann kannst du markieren.")
+        }
     MarkResult.AlreadyMarked -> errorMessage("Dieser Block ist schon markiert, in diesem oder einem anderen Event.")
     MarkResult.EventEnded -> errorMessage("In einem beendeten Event kann nicht mehr markiert werden.")
     MarkResult.NotFound -> errorMessage("Das Event des Werkzeugs gibt es nicht mehr.")
 }
+
+/** A block with stored contents or data (chest, sign, banner …) would lose them when it is marked. */
+fun unsupportedBlockMessage(): Component =
+    errorMessage("Blöcke mit Inhalt oder Daten (z. B. Kisten, Schilder, Banner) können nicht markiert werden, nur Köpfe und normale Blöcke.")
 
 fun UnmarkResult.message(): Component = when (this) {
     is UnmarkResult.Success -> markerMessage("Markierung entfernt", markerCount, markerLimit, marker.position)

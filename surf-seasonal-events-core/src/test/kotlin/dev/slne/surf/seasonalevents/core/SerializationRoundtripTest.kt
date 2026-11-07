@@ -142,6 +142,7 @@ class SerializationRoundtripTest {
         val cases: List<CreateEventResult> = listOf(
             CreateEventResult.Success(event),
             CreateEventResult.NameTaken,
+            CreateEventResult.InvalidName,
             CreateEventResult.InvalidLimit,
         )
         cases.forEach { assertEquals(it, roundtrip<CreateEventResult>(it)) }
@@ -153,6 +154,8 @@ class SerializationRoundtripTest {
             UpdateEventResult.Success(event),
             UpdateEventResult.NotFound,
             UpdateEventResult.AlreadyEnded,
+            UpdateEventResult.InvalidDisplayName,
+            UpdateEventResult.NotEnoughPackages(filled = 20, needed = 24),
         )
         cases.forEach { assertEquals(it, roundtrip<UpdateEventResult>(it)) }
     }
@@ -165,6 +168,7 @@ class SerializationRoundtripTest {
             StartEventResult.AlreadyEnded,
             StartEventResult.NoMarkers,
             StartEventResult.NoPackages,
+            StartEventResult.NotEnoughPackages(filled = 30, needed = 40),
             StartEventResult.NotFound,
         )
         cases.forEach { assertEquals(it, roundtrip<StartEventResult>(it)) }
@@ -184,6 +188,7 @@ class SerializationRoundtripTest {
         val cases: List<DeleteEventResult> = listOf(
             DeleteEventResult.Success,
             DeleteEventResult.IsActive,
+            DeleteEventResult.HasMarkers(markerCount = 12),
             DeleteEventResult.NotFound,
         )
         cases.forEach { assertEquals(it, roundtrip<DeleteEventResult>(it)) }
@@ -195,6 +200,7 @@ class SerializationRoundtripTest {
             MarkResult.Success(marker, markerCount = 3, markerLimit = 4),
             MarkResult.LimitReached(24),
             MarkResult.AlreadyMarked,
+            MarkResult.NotEnoughPackages(filled = 40, needed = 41),
             MarkResult.EventEnded,
             MarkResult.NotFound,
         )
@@ -232,8 +238,28 @@ class SerializationRoundtripTest {
             UpdateLootResult.NotFound,
             UpdateLootResult.FixedDayTaken,
             UpdateLootResult.NotDailyEvent,
+            UpdateLootResult.EventEnded,
+            UpdateLootResult.Conflict,
+            UpdateLootResult.NotEnoughPackages(filled = 39, needed = 40),
         )
         cases.forEach { assertEquals(it, roundtrip<UpdateLootResult>(it)) }
+    }
+
+    @Test
+    fun `every delete loot result case survives roundtrip`() {
+        val cases: List<DeleteLootResult> = listOf(
+            DeleteLootResult.Success,
+            DeleteLootResult.NotFound,
+            DeleteLootResult.EventEnded,
+            DeleteLootResult.NotEnoughPackages(filled = 39, needed = 40),
+        )
+        cases.forEach { assertEquals(it, roundtrip<DeleteLootResult>(it)) }
+    }
+
+    @Test
+    fun `marker positions survive roundtrip as a list`() {
+        val positions = listOf(marker.position, MarkerPosition(world, 0, -64, 0))
+        assertEquals(positions, roundtrip(positions))
     }
 
     @Test

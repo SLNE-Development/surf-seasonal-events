@@ -25,6 +25,7 @@ interface EventRpcService {
      * @param dailyLimit collections per player and day in a `COLLECT` event, 0 for unlimited;
      * ignored for `DAILY`
      * @return [CreateEventResult.NameTaken] if the name exists,
+     * [CreateEventResult.InvalidName] if the name is blank or too long,
      * [CreateEventResult.InvalidLimit] if a limit is out of range
      */
     suspend fun create(name: String, mode: EventMode, markerLimit: Int, dailyLimit: Int): CreateEventResult
@@ -44,7 +45,8 @@ interface EventRpcService {
     /**
      * Sets the MiniMessage display name of an event.
      *
-     * @return [UpdateEventResult.AlreadyEnded] if the event is `ENDED`
+     * @return [UpdateEventResult.AlreadyEnded] if the event is `ENDED`,
+     * [UpdateEventResult.InvalidDisplayName] if the name is blank or too long
      */
     suspend fun setDisplayName(eventId: ULong, displayName: String): UpdateEventResult
 
@@ -53,7 +55,8 @@ interface EventRpcService {
      *
      * @param endsAt when the event ends automatically, or null to run until stopped
      * @return [StartEventResult.AnotherEventActive] if another event is running,
-     * [StartEventResult.NoMarkers] or [StartEventResult.NoPackages] if the event is not set up yet
+     * [StartEventResult.NoMarkers] or [StartEventResult.NoPackages] if the event is not set up yet,
+     * [StartEventResult.NotEnoughPackages] if a `COLLECT` event has fewer filled packages than markers
      */
     suspend fun start(eventId: ULong, endsAt: Instant?): StartEventResult
 
@@ -73,9 +76,11 @@ interface EventRpcService {
     suspend fun stop(): StopEventResult
 
     /**
-     * Deletes an event with all its markers, packages, assignments and collections.
+     * Deletes an event with all its packages, assignments and collections.
      *
-     * @return [DeleteEventResult.IsActive] if the event is running; only `DRAFT` and `ENDED` can be deleted
+     * @return [DeleteEventResult.IsActive] if the event is running, because only `DRAFT` and `ENDED` can be
+     * deleted; [DeleteEventResult.HasMarkers] if markers are left, because their real blocks must be
+     * restored first
      */
     suspend fun delete(eventId: ULong): DeleteEventResult
 }

@@ -2,6 +2,7 @@ package dev.slne.surf.seasonalevents.paper.listener
 
 import com.github.shynixn.mccoroutine.folia.launch
 import dev.slne.surf.seasonalevents.paper.command.errorMessage
+import dev.slne.surf.seasonalevents.paper.command.unsupportedBlockMessage
 import dev.slne.surf.seasonalevents.paper.plugin
 import dev.slne.surf.seasonalevents.paper.tool.BlockSnapshot
 import dev.slne.surf.seasonalevents.paper.tool.MarkerActions
@@ -31,6 +32,7 @@ object MarkerToolListener : Listener {
             return player.sendMessage(errorMessage("Du darfst keine Blöcke markieren."))
         }
         val block = event.clickedBlock?.takeUnless { it.type.isAir } ?: return
+        if (!BlockSnapshot.isSupported(block)) return player.sendMessage(unsupportedBlockMessage())
 
         val snapshot = BlockSnapshot.capture(block)
         plugin.launch { MarkerActions.mark(player, block, eventId, snapshot) }

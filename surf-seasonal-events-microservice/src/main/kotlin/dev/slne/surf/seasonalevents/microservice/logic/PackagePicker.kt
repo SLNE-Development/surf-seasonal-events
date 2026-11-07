@@ -1,7 +1,6 @@
 package dev.slne.surf.seasonalevents.microservice.logic
 
 import dev.slne.surf.seasonalevents.api.event.EventMode
-import dev.slne.surf.seasonalevents.api.loot.LootPackage
 import java.time.LocalDate
 import kotlin.random.Random
 
@@ -15,16 +14,17 @@ object PackagePicker {
      * is chosen; packages fixed to other days are kept for their day. In a `COLLECT` event, fixed days are
      * ignored and any package not yet received may be chosen.
      *
+     * @param packages the filled packages of the event
      * @param receivedIds ids of the packages the player already received in this event
      * @return null if nothing is left for the player
      */
     fun pick(
         mode: EventMode,
-        packages: List<LootPackage>,
+        packages: List<PackageRef>,
         receivedIds: Set<ULong>,
         today: LocalDate,
         random: Random,
-    ): LootPackage? = candidates(mode, packages, receivedIds, today).randomOrNull(random)
+    ): PackageRef? = candidates(mode, packages, receivedIds, today).randomOrNull(random)
 
     /**
      * Returns every package [pick] may choose from, following the same rules. Used to check that a
@@ -32,10 +32,10 @@ object PackagePicker {
      */
     fun candidates(
         mode: EventMode,
-        packages: List<LootPackage>,
+        packages: List<PackageRef>,
         receivedIds: Set<ULong>,
         today: LocalDate,
-    ): List<LootPackage> {
+    ): List<PackageRef> {
         val open = packages.filter { it.id !in receivedIds }
 
         return when (mode) {

@@ -2,6 +2,7 @@ package dev.slne.surf.seasonalevents.paper.gui
 
 import com.github.shynixn.mccoroutine.folia.entityDispatcher
 import com.github.shynixn.mccoroutine.folia.launch
+import com.github.shynixn.mccoroutine.folia.regionDispatcher
 import dev.slne.surf.api.core.messages.adventure.buildText
 import dev.slne.surf.api.paper.builder.buildItem
 import dev.slne.surf.api.paper.builder.displayName
@@ -12,11 +13,13 @@ import dev.slne.surf.seasonalevents.core.client.rpc.RpcOutcome
 import dev.slne.surf.seasonalevents.core.client.rpc.lootRpc
 import dev.slne.surf.seasonalevents.core.client.rpc.rpcCall
 import dev.slne.surf.seasonalevents.paper.command.errorMessage
+import dev.slne.surf.seasonalevents.paper.command.itemsReturnedMessage
 import dev.slne.surf.seasonalevents.paper.command.message
 import dev.slne.surf.seasonalevents.paper.command.unavailableMessage
 import dev.slne.surf.seasonalevents.paper.plugin
 import kotlinx.coroutines.withContext
 import org.bukkit.Bukkit
+import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.entity.Player
 import org.bukkit.inventory.Inventory
@@ -69,34 +72,52 @@ object LootEditor {
     fun saveAndContinue(player: Player, holder: Holder) {
         val items = (0 until CONTENT_SLOTS).mapNotNull { holder.view.getItem(it)?.takeUnless(ItemStack::isEmpty) }
         val bytes = LootItems.encode(items)
+        // Taken now: when the editor closes because the player quits, they are gone afterwards.
+        val dropLocation = player.location
 
         plugin.launch {
             val saved = save(player, holder.lootPackage, bytes)
-            withContext(plugin.entityDispatcher(player)) {
-                if (!saved) giveBack(player, items)
-                continueAfterClose(player, holder)
+            if (player.isOnline) {
+                withContext(plugin.entityDispatcher(player)) {
+                    if (!saved) giveBack(player, items)
+                    continueAfterClose(player, holder)
+                }
+            } else if (!saved) {
+                dropAt(dropLocation, items)
             }
         }
     }
 
+    /** Saves [bytes] unless nothing changed; reports the outcome to [player] and returns whether it was saved. */
     private suspend fun save(player: Player, lootPackage: LootPackage, bytes: ByteArray): Boolean {
         if (bytes.contentEquals(lootPackage.items)) return true
         if (bytes.size > LootItems.MAX_BYTES) {
-            player.sendMessage(errorMessage("Das Paket ist zu groß zum Speichern. Du hast die Items zurückbekommen."))
+            player.sendMessage(errorMessage("Das Paket ist zu groß zum Speichern."))
+            player.sendMessage(itemsReturnedMessage())
             return false
         }
 
-        val outcome = rpcCall { lootRpc.save(lootPackage.id, bytes) }
+        val outcome = rpcCall { lootRpc.save(lootPackage.id, expectedItems = lootPackage.items, items = bytes) }
         if (outcome !is RpcOutcome.Ok) {
             player.sendMessage(unavailableMessage())
+            player.sendMessage(itemsReturnedMessage())
             return false
         }
         player.sendMessage(outcome.value.message())
-        return outcome.value is UpdateLootResult.Success
+        val saved = outcome.value is UpdateLootResult.Success
+        if (!saved) player.sendMessage(itemsReturnedMessage())
+        return saved
     }
 
     private fun giveBack(player: Player, items: List<ItemStack>) {
         player.inventory.addItem(*items.toTypedArray()).values.forEach { player.world.dropItem(player.location, it) }
+    }
+
+    /** For a player who left meanwhile: drops [items] where they closed the editor, so they are not lost. */
+    private suspend fun dropAt(location: Location, items: List<ItemStack>) {
+        withContext(plugin.regionDispatcher(location)) {
+            items.forEach { location.world.dropItem(location, it) { drop -> drop.isUnlimitedLifetime = true } }
+        }
     }
 
     private fun continueAfterClose(player: Player, holder: Holder) {

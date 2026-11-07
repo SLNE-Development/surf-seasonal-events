@@ -5,6 +5,7 @@ import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.core.and
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.core.eq
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.deleteWhere
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.insertReturning
+import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.select
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.selectAll
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.transactions.suspendTransaction
 import dev.slne.surf.seasonalevents.api.marker.EventMarker
@@ -75,6 +76,20 @@ object MarkerRepository {
         EventMarkersTable.selectAll()
             .where { EventMarkersTable.eventId eq eventId }
             .map { it.toMarker() }
+            .toList()
+    }
+
+    /** Positions of every marker of every event, without the block data. */
+    suspend fun findAllPositions(): List<MarkerPosition> = suspendTransaction {
+        EventMarkersTable.select(EventMarkersTable.world, EventMarkersTable.x, EventMarkersTable.y, EventMarkersTable.z)
+            .map {
+                MarkerPosition(
+                    world = it[EventMarkersTable.world],
+                    x = it[EventMarkersTable.x],
+                    y = it[EventMarkersTable.y],
+                    z = it[EventMarkersTable.z],
+                )
+            }
             .toList()
     }
 

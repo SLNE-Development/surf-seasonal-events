@@ -1,37 +1,32 @@
 package dev.slne.surf.seasonalevents.paper.tick
 
-import com.github.shynixn.mccoroutine.folia.launch
+import com.github.shynixn.mccoroutine.folia.scope
 import dev.slne.surf.api.core.util.logger
+import dev.slne.surf.api.core.util.runWithFixedDelay
+import dev.slne.surf.seasonalevents.api.SeasonalTime
 import dev.slne.surf.seasonalevents.core.client.rpc.RpcOutcome
 import dev.slne.surf.seasonalevents.core.client.rpc.eventRpc
 import dev.slne.surf.seasonalevents.core.client.rpc.rpcCall
 import dev.slne.surf.seasonalevents.paper.plugin
 import dev.slne.surf.seasonalevents.paper.render.ViewService
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import java.time.LocalDate
-import java.time.ZoneId
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Checks every 15 seconds whether the day (Europe/Berlin) or the active event changed and then reloads
- * every view: a new day brings new `DAILY` blocks, and an end date that passed ends the event, because
- * the microservice ends it lazily when it is asked for the active event.
+ * Checks every 15 seconds whether the day or the active event changed and then reloads every view:
+ * a new day brings new `DAILY` blocks, and an end date that passed ends the event, because the
+ * microservice ends it lazily when it is asked for the active event. An unexpected error in one run
+ * is logged and the next run still happens.
  */
-class EventTicker(private val today: () -> LocalDate = { LocalDate.now(ZoneId.of("Europe/Berlin")) }) {
+class EventTicker(private val today: () -> LocalDate = { LocalDate.now(SeasonalTime.ZONE) }) {
 
     private var job: Job? = null
     private var lastDay: LocalDate? = null
     private var lastActiveId: ULong? = null
 
     fun start() {
-        job = plugin.launch {
-            while (isActive) {
-                tick()
-                delay(INTERVAL)
-            }
-        }
+        job = plugin.scope.runWithFixedDelay(INTERVAL, taskName = "seasonal-events-ticker") { tick() }
     }
 
     fun stop() {

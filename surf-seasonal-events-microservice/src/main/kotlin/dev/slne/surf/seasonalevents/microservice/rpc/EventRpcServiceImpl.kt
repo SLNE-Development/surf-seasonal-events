@@ -11,42 +11,49 @@ import dev.slne.surf.seasonalevents.api.result.StopEventResult
 import dev.slne.surf.seasonalevents.api.result.UpdateEventResult
 import dev.slne.surf.seasonalevents.core.rpc.EventRpcService
 import dev.slne.surf.seasonalevents.microservice.db.repository.EventRepository
+import dev.slne.surf.seasonalevents.microservice.db.repository.LootRepository
+import dev.slne.surf.seasonalevents.microservice.db.repository.MarkerRepository
 import dev.slne.surf.seasonalevents.microservice.logic.EventRules
+import dev.slne.surf.seasonalevents.microservice.logic.PackageRequirement
+import dev.slne.surf.seasonalevents.microservice.logic.SeasonalClock
 import java.time.Instant
 
-/** Microservice side of [EventRpcService]: combines [EventRules] with [EventRepository]. */
-object EventRpcServiceImpl : EventRpcService {
+/**
+ * Microservice side of [EventRpcService]: combines [EventRules] with [EventRepository].
+ * Every write runs under [StaffWriteLock].
+ *
+ * @param clock source of "now"; replaceable to test end dates
+ */
+class EventRpcServiceImpl(private val clock: SeasonalClock = SeasonalClock()) : EventRpcService {
 
-    override suspend fun create(name: String, mode: EventMode, markerLimit: Int, dailyLimit: Int): CreateEventResult {
-        // a. Rule check: the limits must be valid.
-        EventRules.checkCreate(markerLimit, dailyLimit)?.let { return it }
+    override suspend fun create(name: String, mode: EventMode, markerLimit: Int, dailyLimit: Int): CreateEventResult =
+        StaffWriteLock.withLock {
+            suspendTransaction {
+                EventRules.checkCreate(name, markerLimit, dailyLimit)?.let { return@suspendTransaction it }
+                if (EventRepository.findByName(name) != null) return@suspendTransaction CreateEventResult.NameTaken
 
-        // b. The technical name must be free.
-        if (EventRepository.findByName(name) != null) return CreateEventResult.NameTaken
+                CreateEventResult.Success(EventRepository.insert(name, mode, markerLimit, dailyLimit))
+            }
+        }
 
-        // c. Insert and report success.
-        val event = EventRepository.insert(name, mode, markerLimit, dailyLimit)
-        return CreateEventResult.Success(event)
-    }
+    override suspend fun start(eventId: ULong, endsAt: Instant?): StartEventResult = StaffWriteLock.withLock {
+        suspendTransaction {
+            val target = EventRepository.findById(eventId)
+                ?: return@suspendTransaction StartEventResult.NotFound
 
-    override suspend fun start(eventId: ULong, endsAt: Instant?): StartEventResult = suspendTransaction {
-        // Inside the lambda, `return` needs the label `@suspendTransaction`.
-        // a. The event must exist.
-        val target = EventRepository.findById(eventId)
-            ?: return@suspendTransaction StartEventResult.NotFound
+            val markerCount = MarkerRepository.count(eventId)
+            EventRules.checkStart(
+                target = target,
+                active = getActiveEvent(),
+                markerCount = markerCount,
+                packageCount = LootRepository.countFilled(eventId),
+                requiredPackages = PackageRequirement.required(target.mode, markerCount, clock.today(), endsAt),
+            )?.let { return@suspendTransaction it }
 
-        // b. Rule check: not ended, no other active event, markers and packages exist.
-        EventRules.checkStart(
-            target = target,
-            active = EventRepository.findActive(),
-            markerCount = EventRepository.countMarkers(eventId),
-            packageCount = EventRepository.countPackages(eventId),
-        )?.let { return@suspendTransaction it }
-
-        // c. Activate and report success.
-        val started = EventRepository.updateState(eventId, EventState.ACTIVE, startedAt = Instant.now(), endsAt = endsAt)
-            ?: return@suspendTransaction StartEventResult.NotFound
-        StartEventResult.Success(started)
+            val started = EventRepository.updateState(eventId, EventState.ACTIVE, startedAt = clock.now(), endsAt = endsAt)
+                ?: return@suspendTransaction StartEventResult.NotFound
+            StartEventResult.Success(started)
+        }
     }
 
     override suspend fun findAll(): List<SeasonalEvent> = EventRepository.findAll()
@@ -56,8 +63,9 @@ object EventRpcServiceImpl : EventRpcService {
     override suspend fun getActiveEvent(): SeasonalEvent? = suspendTransaction {
         val active = EventRepository.findActive() ?: return@suspendTransaction null
 
-        // Lazy expiry: an event past its end is ended on the first read after that.
-        if (EventRules.isExpired(active, Instant.now())) {
+        // Lazy expiry: an event past its end is ended on the first read after that. Ending it twice in
+        // parallel writes the same values, so this read needs no lock.
+        if (EventRules.isExpired(active, clock.now())) {
             EventRepository.updateState(active.id, EventState.ENDED, active.startedAt, active.endsAt)
             return@suspendTransaction null
         }
@@ -65,38 +73,49 @@ object EventRpcServiceImpl : EventRpcService {
     }
 
     override suspend fun setDisplayName(eventId: ULong, displayName: String): UpdateEventResult =
+        StaffWriteLock.withLock {
+            suspendTransaction {
+                val event = EventRepository.findById(eventId) ?: return@suspendTransaction UpdateEventResult.NotFound
+                EventRules.checkDisplayName(event, displayName)?.let { return@suspendTransaction it }
+
+                val updated = EventRepository.updateDisplayName(eventId, displayName)
+                    ?: return@suspendTransaction UpdateEventResult.NotFound
+                UpdateEventResult.Success(updated)
+            }
+        }
+
+    override suspend fun setEnd(eventId: ULong, endsAt: Instant?): UpdateEventResult = StaffWriteLock.withLock {
         suspendTransaction {
             val event = EventRepository.findById(eventId) ?: return@suspendTransaction UpdateEventResult.NotFound
             if (event.state == EventState.ENDED) return@suspendTransaction UpdateEventResult.AlreadyEnded
+            PackageGuard.shortageAfter(event, endsAt = endsAt)?.let {
+                return@suspendTransaction UpdateEventResult.NotEnoughPackages(it.filled, it.needed)
+            }
 
-            val updated = EventRepository.updateDisplayName(eventId, displayName)
+            val updated = EventRepository.updateEndsAt(eventId, endsAt)
                 ?: return@suspendTransaction UpdateEventResult.NotFound
             UpdateEventResult.Success(updated)
         }
-
-    override suspend fun setEnd(eventId: ULong, endsAt: Instant?): UpdateEventResult = suspendTransaction {
-        val event = EventRepository.findById(eventId) ?: return@suspendTransaction UpdateEventResult.NotFound
-        if (event.state == EventState.ENDED) return@suspendTransaction UpdateEventResult.AlreadyEnded
-
-        val updated = EventRepository.updateEndsAt(eventId, endsAt)
-            ?: return@suspendTransaction UpdateEventResult.NotFound
-        UpdateEventResult.Success(updated)
     }
 
-    override suspend fun stop(): StopEventResult = suspendTransaction {
-        val active = EventRepository.findActive() ?: return@suspendTransaction StopEventResult.NoActiveEvent
+    override suspend fun stop(): StopEventResult = StaffWriteLock.withLock {
+        suspendTransaction {
+            val active = getActiveEvent() ?: return@suspendTransaction StopEventResult.NoActiveEvent
 
-        // Keep startedAt; a manual stop ends the event now.
-        val stopped = EventRepository.updateState(active.id, EventState.ENDED, active.startedAt, Instant.now())
-            ?: return@suspendTransaction StopEventResult.NoActiveEvent
-        StopEventResult.Success(stopped)
+            // Keep startedAt; a manual stop ends the event now.
+            val stopped = EventRepository.updateState(active.id, EventState.ENDED, active.startedAt, clock.now())
+                ?: return@suspendTransaction StopEventResult.NoActiveEvent
+            StopEventResult.Success(stopped)
+        }
     }
 
-    override suspend fun delete(eventId: ULong): DeleteEventResult = suspendTransaction {
-        val event = EventRepository.findById(eventId) ?: return@suspendTransaction DeleteEventResult.NotFound
-        if (event.state == EventState.ACTIVE) return@suspendTransaction DeleteEventResult.IsActive
+    override suspend fun delete(eventId: ULong): DeleteEventResult = StaffWriteLock.withLock {
+        suspendTransaction {
+            val event = EventRepository.findById(eventId) ?: return@suspendTransaction DeleteEventResult.NotFound
+            EventRules.checkDelete(event, MarkerRepository.count(eventId))?.let { return@suspendTransaction it }
 
-        EventRepository.delete(eventId)
-        DeleteEventResult.Success
+            EventRepository.delete(eventId)
+            DeleteEventResult.Success
+        }
     }
 }

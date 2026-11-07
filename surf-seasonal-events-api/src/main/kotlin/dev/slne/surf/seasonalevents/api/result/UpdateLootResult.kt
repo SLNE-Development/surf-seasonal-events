@@ -21,4 +21,19 @@ sealed interface UpdateLootResult {
     /** Fixed days only exist in DAILY events. */
     @Serializable
     data object NotDailyEvent : UpdateLootResult
+
+    /** The event has ended; its packages can no longer be changed. */
+    @Serializable
+    data object EventEnded : UpdateLootResult
+
+    /**
+     * Emptying the package would leave the running event with fewer filled packages than it needs
+     * ([StartEventResult.NotEnoughPackages] explains the rule); nothing was changed.
+     */
+    @Serializable
+    data class NotEnoughPackages(val filled: Int, val needed: Int) : UpdateLootResult
+
+    /** Someone else saved the package since it was opened; nothing was changed. */
+    @Serializable
+    data object Conflict : UpdateLootResult
 }

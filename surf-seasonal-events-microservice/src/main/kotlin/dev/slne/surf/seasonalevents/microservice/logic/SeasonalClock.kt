@@ -1,12 +1,15 @@
 package dev.slne.surf.seasonalevents.microservice.logic
 
+import dev.slne.surf.seasonalevents.api.SeasonalTime
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
 
+/**
+ * The microservice's only source of the current time; replaceable with a fixed [Clock] in tests.
+ * Calendar days are counted in [SeasonalTime.ZONE].
+ */
 class SeasonalClock(private val clock: Clock = Clock.systemUTC()) {
-    val zone: ZoneId = ZoneId.of("Europe/Berlin")
     fun now(): Instant = clock.instant()
-    fun today(): LocalDate = LocalDate.ofInstant(now(), zone)
+    fun today(): LocalDate = LocalDate.ofInstant(now(), SeasonalTime.ZONE)
 }

@@ -26,6 +26,16 @@ sealed interface StartEventResult {
     @Serializable
     data object NoPackages : StartEventResult
 
+    /**
+     * Too few filled packages, because a player receives each package only once: a `COLLECT` event needs
+     * one per marker, a `DAILY` event with an end date one per event day.
+     *
+     * @param filled packages with at least one item
+     * @param needed packages required
+     */
+    @Serializable
+    data class NotEnoughPackages(val filled: Int, val needed: Int) : StartEventResult
+
     /** No event with the given id exists. */
     @Serializable
     data object NotFound : StartEventResult

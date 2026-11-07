@@ -1,6 +1,7 @@
 package dev.slne.surf.seasonalevents.paper.command
 
 import dev.slne.surf.api.core.messages.adventure.sendText
+import dev.slne.surf.seasonalevents.api.event.EventState
 import dev.slne.surf.seasonalevents.api.event.SeasonalEvent
 import dev.slne.surf.seasonalevents.api.result.UpdateLootResult
 import dev.slne.surf.seasonalevents.core.client.rpc.RpcOutcome
@@ -16,6 +17,7 @@ import net.kyori.adventure.audience.Audience
  */
 internal suspend fun Audience.copyLoot(from: SeasonalEvent, to: SeasonalEvent) {
     if (from.id == to.id) return sendMessage(errorMessage("Quelle und Ziel sind dasselbe Event."))
+    if (to.state == EventState.ENDED) return sendMessage(lootOfEndedEventMessage(to.name))
 
     val source = rpcCall { lootRpc.findByEvent(from.id) }
     if (source !is RpcOutcome.Ok) return sendMessage(unavailableMessage())
@@ -27,7 +29,10 @@ internal suspend fun Audience.copyLoot(from: SeasonalEvent, to: SeasonalEvent) {
         if (created !is RpcOutcome.Ok) break
         val copy = (created.value as? UpdateLootResult.Success)?.lootPackage ?: break
 
-        if (original.items.isNotEmpty() && rpcCall { lootRpc.save(copy.id, original.items) } !is RpcOutcome.Ok) break
+        if (original.items.isNotEmpty()) {
+            val saved = rpcCall { lootRpc.save(copy.id, expectedItems = copy.items, items = original.items) }
+            if ((saved as? RpcOutcome.Ok)?.value !is UpdateLootResult.Success) break
+        }
         copied++
     }
 

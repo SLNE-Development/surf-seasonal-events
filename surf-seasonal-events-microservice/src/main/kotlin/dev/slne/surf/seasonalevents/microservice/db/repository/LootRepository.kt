@@ -1,17 +1,22 @@
 package dev.slne.surf.seasonalevents.microservice.db.repository
 
+import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.core.CustomFunction
+import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.core.IntegerColumnType
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.core.ResultRow
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.core.and
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.core.eq
+import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.core.greater
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.core.neq
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.core.statements.api.ExposedBlob
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.deleteWhere
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.insertReturning
+import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.select
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.selectAll
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.transactions.suspendTransaction
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.update
 import dev.slne.surf.seasonalevents.api.loot.LootPackage
 import dev.slne.surf.seasonalevents.microservice.db.table.LootPackagesTable
+import dev.slne.surf.seasonalevents.microservice.logic.PackageRef
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.single
 import kotlinx.coroutines.flow.singleOrNull
@@ -20,6 +25,9 @@ import java.time.LocalDate
 
 /** Database access for [LootPackagesTable]. Joins an outer transaction if one is open. */
 object LootRepository {
+
+    /** Size of the item bytes, computed by the database so the blob itself is not transferred. */
+    private val itemsLength = CustomFunction("LENGTH", IntegerColumnType(), LootPackagesTable.items)
 
     private fun ResultRow.toPackage() = LootPackage(
         id = this[LootPackagesTable.id].value,
@@ -45,11 +53,28 @@ object LootRepository {
             ?.toPackage()
     }
 
+    /** All packages of the event including their items, empty ones included. */
     suspend fun findByEvent(eventId: ULong): List<LootPackage> = suspendTransaction {
         LootPackagesTable.selectAll()
             .where { LootPackagesTable.eventId eq eventId }
             .map { it.toPackage() }
             .toList()
+    }
+
+    /** The packages of the event that have items, without loading the items. */
+    suspend fun findFilledRefs(eventId: ULong): List<PackageRef> = suspendTransaction {
+        LootPackagesTable.select(LootPackagesTable.id, LootPackagesTable.fixedDay)
+            .where { (LootPackagesTable.eventId eq eventId) and (itemsLength greater 0) }
+            .map { PackageRef(it[LootPackagesTable.id].value, it[LootPackagesTable.fixedDay]) }
+            .toList()
+    }
+
+    /** Number of packages of the event that have items; empty packages are never handed out. */
+    suspend fun countFilled(eventId: ULong): Int = suspendTransaction {
+        LootPackagesTable.selectAll()
+            .where { (LootPackagesTable.eventId eq eventId) and (itemsLength greater 0) }
+            .count()
+            .toInt()
     }
 
     /** Returns whether a package of [eventId] other than [exceptId] already has [day] as its fixed day. */

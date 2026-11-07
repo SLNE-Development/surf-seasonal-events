@@ -45,6 +45,12 @@ interface MarkerRpcService {
     suspend fun findByEvent(eventId: ULong): List<EventMarker>
 
     /**
+     * Returns the position of every stored marker of every event. These positions stay air in the world
+     * until their event is restored, so the plugin keeps them free.
+     */
+    suspend fun findAllPositions(): List<MarkerPosition>
+
+    /**
      * Deletes all markers of an event and returns them, so the plugin can put the real blocks back.
      *
      * @return [RestoreResult.IsActive] if the event is running

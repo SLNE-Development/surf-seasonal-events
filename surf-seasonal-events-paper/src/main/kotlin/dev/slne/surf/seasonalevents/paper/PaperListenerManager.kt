@@ -1,8 +1,8 @@
 package dev.slne.surf.seasonalevents.paper
 
-import com.github.retrooper.packetevents.PacketEvents
 import com.github.retrooper.packetevents.event.PacketListenerCommon
 import com.github.retrooper.packetevents.event.PacketListenerPriority
+import dev.slne.surf.api.core.extensions.packetEvents
 import dev.slne.surf.api.paper.event.register
 import dev.slne.surf.seasonalevents.paper.listener.ChunkLoadListener
 import dev.slne.surf.seasonalevents.paper.listener.FakeBlockClickListener
@@ -24,14 +24,14 @@ object PaperListenerManager {
         MarkerToolListener.register()
         LootEditorListener.register()
 
-        val packetEvents = PacketEvents.getAPI().eventManager
-        packetListeners += packetEvents.registerListener(FakeBlockPacketListener, PacketListenerPriority.HIGH)
-        packetListeners += packetEvents.registerListener(FakeBlockClickListener, PacketListenerPriority.NORMAL)
+        val events = packetEvents.eventManager
+        packetListeners += events.registerListener(FakeBlockPacketListener, PacketListenerPriority.HIGH)
+        packetListeners += events.registerListener(FakeBlockClickListener, PacketListenerPriority.NORMAL)
     }
 
     /** PacketEvents keeps its listeners across a plugin reload, so they are removed explicitly. */
     fun unregisterAll() {
-        packetListeners.forEach { PacketEvents.getAPI().eventManager.unregisterListener(it) }
+        packetListeners.forEach { packetEvents.eventManager.unregisterListener(it) }
         packetListeners.clear()
     }
 }

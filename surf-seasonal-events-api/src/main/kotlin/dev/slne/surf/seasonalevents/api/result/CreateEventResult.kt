@@ -14,6 +14,10 @@ sealed interface CreateEventResult {
     @Serializable
     data object NameTaken : CreateEventResult
 
+    /** The name is blank or longer than [dev.slne.surf.seasonalevents.api.event.SeasonalEvent.MAX_NAME_LENGTH]. */
+    @Serializable
+    data object InvalidName : CreateEventResult
+
     /** The marker limit is not positive or the daily limit is negative. */
     @Serializable
     data object InvalidLimit : CreateEventResult

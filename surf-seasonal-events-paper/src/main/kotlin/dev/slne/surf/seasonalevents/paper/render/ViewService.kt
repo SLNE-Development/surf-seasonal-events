@@ -9,8 +9,12 @@ import dev.slne.surf.seasonalevents.core.client.rpc.markerRpc
 import dev.slne.surf.seasonalevents.core.client.rpc.progressRpc
 import dev.slne.surf.seasonalevents.core.client.rpc.rpcCall
 import dev.slne.surf.seasonalevents.paper.plugin
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.bukkit.Bukkit
 import org.bukkit.block.Block
@@ -23,6 +27,9 @@ import java.util.concurrent.ConcurrentHashMap
  * the microservice, staff in edit mode see every marker of the edited event.
  */
 object ViewService {
+
+    /** Upper bound of view reloads running at the same time in [reloadAll]. */
+    private const val PARALLEL_RELOADS = 16
 
     val cache = PlayerViewCache()
 
@@ -44,6 +51,9 @@ object ViewService {
      */
     suspend fun reload(player: Player) = reloadLocks.computeIfAbsent(player.uniqueId) { Mutex() }.withLock {
         val markers = loadMarkers(player.uniqueId) ?: return@withLock
+        // The player may have left during the call; then nothing is cached for them again.
+        if (!player.isOnline) return@withLock
+
         val old = cache.markers(player.uniqueId).associateBy { it.position }
         val new = markers.associateBy { it.position }
         cache.set(player.uniqueId, markers)
@@ -54,10 +64,19 @@ object ViewService {
         }
     }
 
-    /** Reloads the protected positions and the view of every online player, e.g. after start or stop. */
+    /**
+     * Reloads the protected positions and the view of every online player, e.g. after start or stop
+     * or at a new day. Players are reloaded in parallel, at most [PARALLEL_RELOADS] at a time, so a full
+     * server does not wait for hundreds of calls in a row and the microservice is not flooded either.
+     */
     suspend fun reloadAll() {
         reloadProtected()
-        Bukkit.getOnlinePlayers().forEach { reload(it) }
+        reloadParallel(Bukkit.getOnlinePlayers().toList())
+    }
+
+    private suspend fun reloadParallel(players: List<Player>) = coroutineScope {
+        val permits = Semaphore(PARALLEL_RELOADS)
+        players.forEach { player -> launch { permits.withPermit { reload(player) } } }
     }
 
     /**
@@ -67,9 +86,7 @@ object ViewService {
     suspend fun reloadAfterMarkerChange(eventId: ULong) {
         reloadProtected()
         val activeId = (rpcCall { eventRpc.getActiveEvent() } as? RpcOutcome.Ok)?.value?.id
-        Bukkit.getOnlinePlayers()
-            .filter { activeId == eventId || editing[it.uniqueId] == eventId }
-            .forEach { reload(it) }
+        reloadParallel(Bukkit.getOnlinePlayers().filter { activeId == eventId || editing[it.uniqueId] == eventId })
     }
 
     private suspend fun loadMarkers(player: UUID): List<EventMarker>? {
@@ -82,14 +99,10 @@ object ViewService {
         return (outcome as? RpcOutcome.Ok)?.value
     }
 
+    /** Keeps the old positions if the microservice is unreachable. */
     private suspend fun reloadProtected() {
-        val events = rpcCall { eventRpc.findAll() } as? RpcOutcome.Ok ?: return
-        val positions = HashSet<MarkerPosition>()
-        for (event in events.value) {
-            val markers = rpcCall { markerRpc.findByEvent(event.id) } as? RpcOutcome.Ok ?: return
-            markers.value.mapTo(positions) { it.position }
-        }
-        protectedPositions = positions
+        val positions = rpcCall { markerRpc.findAllPositions() } as? RpcOutcome.Ok ?: return
+        protectedPositions = positions.value.toHashSet()
     }
 
     /** Switches [player] to the edit view of [eventId]; call [reload] afterwards to send it. */

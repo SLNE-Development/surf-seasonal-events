@@ -1,6 +1,5 @@
 package dev.slne.surf.seasonalevents.paper.listener
 
-import com.github.retrooper.packetevents.PacketEvents
 import com.github.retrooper.packetevents.event.PacketListener
 import com.github.retrooper.packetevents.event.PacketReceiveEvent
 import com.github.retrooper.packetevents.protocol.packettype.PacketType
@@ -13,6 +12,7 @@ import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerAc
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerBlockChange
 import com.github.shynixn.mccoroutine.folia.entityDispatcher
 import com.github.shynixn.mccoroutine.folia.launch
+import dev.slne.surf.api.core.extensions.sendPacket
 import dev.slne.surf.seasonalevents.api.marker.EventMarker
 import dev.slne.surf.seasonalevents.api.marker.MarkerPosition
 import dev.slne.surf.seasonalevents.paper.collect.CollectService
@@ -64,9 +64,8 @@ object FakeBlockClickListener : PacketListener {
 
         event.isCancelled = true
         val stateId = SpigotConversionUtil.fromBukkitBlockData(Bukkit.createBlockData(marker.blockData)).globalId
-        val players = PacketEvents.getAPI().playerManager
-        players.sendPacket(player, WrapperPlayServerBlockChange(position, stateId))
-        players.sendPacket(player, WrapperPlayServerAcknowledgeBlockChanges(sequence))
+        WrapperPlayServerBlockChange(position, stateId).sendPacket(player)
+        WrapperPlayServerAcknowledgeBlockChanges(sequence).sendPacket(player)
 
         if (triggers) plugin.launch(plugin.entityDispatcher(player)) { onClick(player, marker, rightClick) }
     }

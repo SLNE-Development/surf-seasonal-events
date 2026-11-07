@@ -23,4 +23,12 @@ data class SeasonalEvent(
     /** When the event was started; null while it is still a draft. */
     val startedAt: @Contextual Instant?,
     val createdAt: @Contextual Instant,
-)
+) {
+    companion object {
+        /** Longest allowed [name]; matches the database column. */
+        const val MAX_NAME_LENGTH = 64
+
+        /** Longest allowed [displayName] including MiniMessage tags; matches the database column. */
+        const val MAX_DISPLAY_NAME_LENGTH = 255
+    }
+}

@@ -14,10 +14,13 @@ import dev.slne.surf.api.core.command.args.awaiting
 import dev.slne.surf.api.core.messages.adventure.buildText
 import dev.slne.surf.api.core.messages.adventure.lifetime
 import dev.slne.surf.api.core.messages.adventure.sendText
+import dev.slne.surf.api.paper.command.args.MiniMessageArgument
 import dev.slne.surf.api.paper.command.executors.anyExecutorSuspend
 import dev.slne.surf.api.paper.command.executors.playerExecutorSuspend
 import dev.slne.surf.seasonalevents.api.event.EventMode
+import dev.slne.surf.seasonalevents.api.event.EventState
 import dev.slne.surf.seasonalevents.api.event.SeasonalEvent
+import dev.slne.surf.seasonalevents.api.progress.PlayerStatus
 import dev.slne.surf.seasonalevents.core.client.rpc.RpcOutcome
 import dev.slne.surf.seasonalevents.core.client.rpc.eventRpc
 import dev.slne.surf.seasonalevents.core.client.rpc.progressRpc
@@ -31,7 +34,6 @@ import dev.slne.surf.seasonalevents.paper.util.permission.SeasonalEventsPermissi
 import net.kyori.adventure.audience.Audience
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.TextDecoration
-import dev.slne.surf.seasonalevents.api.progress.PlayerStatus
 import org.bukkit.entity.Player
 import java.time.Instant
 import kotlin.time.Duration.Companion.minutes
@@ -73,10 +75,12 @@ fun seasonalEventsCommand() = commandTree("seasonalevents") {
     literalArgument("displayname") {
         withPermission(SeasonalEventsPermissions.COMMAND_EDIT)
         argument(SeasonalEventArgument("event")) {
-            greedyStringArgument("displayName") {
+            // Parsed as MiniMessage so a broken tag fails right here; the raw text is what gets stored.
+            argument(MiniMessageArgument("displayName", greedy = true)) {
                 anyExecutorSuspend { sender, args ->
                     val event: SeasonalEvent = args.awaiting("event")
-                    sender.reply({ eventRpc.setDisplayName(event.id, args["displayName"] as String) }) { it.message() }
+                    val displayName = args.getRaw("displayName").orEmpty().trim()
+                    sender.reply({ eventRpc.setDisplayName(event.id, displayName) }) { it.message() }
                 }
             }
         }
@@ -111,7 +115,11 @@ fun seasonalEventsCommand() = commandTree("seasonalevents") {
     literalArgument("loot") {
         withPermission(SeasonalEventsPermissions.COMMAND_LOOT)
         argument(SeasonalEventArgument("event")) {
-            playerExecutorSuspend { player, args -> openLootOverview(player, args.awaiting("event")) }
+            playerExecutorSuspend { player, args ->
+                val event: SeasonalEvent = args.awaiting("event")
+                if (event.state == EventState.ENDED) return@playerExecutorSuspend player.sendMessage(lootOfEndedEventMessage(event.name))
+                openLootOverview(player, event)
+            }
         }
     }
 
@@ -201,7 +209,7 @@ private suspend fun Audience.create(args: CommandArguments, dailyLimit: Int) {
 }
 
 private suspend fun Audience.start(event: SeasonalEvent, endsAt: Instant?) {
-    reply({ eventRpc.start(event.id, endsAt) }) { it.message() }
+    reply({ eventRpc.start(event.id, endsAt) }) { it.message(event) }
     ViewService.reloadAll()
 }
 

@@ -8,6 +8,7 @@ import dev.slne.surf.api.paper.builder.displayName
 import dev.slne.surf.api.paper.inventory.framework.view.icon.ViewIconColor
 import dev.slne.surf.api.paper.inventory.framework.view.icon.ViewIconType
 import dev.slne.surf.api.paper.inventory.framework.view.icon.viewIcon
+import dev.slne.surf.seasonalevents.api.SeasonalTime
 import dev.slne.surf.seasonalevents.api.event.EventMode
 import dev.slne.surf.seasonalevents.api.event.SeasonalEvent
 import dev.slne.surf.seasonalevents.api.loot.LootPackage
@@ -15,7 +16,6 @@ import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Material
 import org.bukkit.inventory.ItemStack
 import java.time.Instant
-import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
 // Buttons and items of the loot GUIs, in the surf menu style. The icons need the surf resource pack.
@@ -83,9 +83,10 @@ fun lootInfoIcon(event: SeasonalEvent, packages: List<LootPackage>, markerCount:
         EventMode.DAILY -> eventDays(event)
         EventMode.COLLECT -> markerCount
     }
-    val enough = needed == null || filled >= needed
+    /** Packages still to fill; null if there are enough. */
+    val missing = needed?.minus(filled)?.takeIf { it > 0 }
 
-    return viewIcon(ViewIconType.QUESTION_MARK, if (enough) ViewIconColor.BLUE else ViewIconColor.YELLOW) {
+    return viewIcon(ViewIconType.QUESTION_MARK, if (missing == null) ViewIconColor.BLUE else ViewIconColor.YELLOW) {
         displayName { primary("So werden Pakete vergeben", TextDecoration.BOLD) }
         buildLore {
             emptyLine()
@@ -115,9 +116,17 @@ fun lootInfoIcon(event: SeasonalEvent, packages: List<LootPackage>, markerCount:
                     },
                 )
             }
-            if (!enough) {
+            if (missing != null) {
                 emptyLine()
-                line { warning("Zu wenige Pakete: manche Spieler gehen leer aus.") }
+                line { warning("Zu wenige Pakete: so kann das Event nicht starten.") }
+                line {
+                    warning(
+                        when (event.mode) {
+                            EventMode.DAILY -> "Noch $missing befüllen oder ein früheres Ende wählen."
+                            EventMode.COLLECT -> "Noch $missing befüllen oder Blöcke entmarkieren."
+                        },
+                    )
+                }
             }
             emptyLine()
         }
@@ -126,8 +135,7 @@ fun lootInfoIcon(event: SeasonalEvent, packages: List<LootPackage>, markerCount:
 
 /** Days from the start (or today) until the end, both inclusive; null without an end date. */
 private fun eventDays(event: SeasonalEvent): Int? {
-    val zone = ZoneId.of("Europe/Berlin")
-    val end = event.endsAt?.atZone(zone)?.toLocalDate() ?: return null
-    val start = (event.startedAt ?: Instant.now()).atZone(zone).toLocalDate()
+    val end = event.endsAt?.atZone(SeasonalTime.ZONE)?.toLocalDate() ?: return null
+    val start = (event.startedAt ?: Instant.now()).atZone(SeasonalTime.ZONE).toLocalDate()
     return (ChronoUnit.DAYS.between(start, end) + 1).toInt().coerceAtLeast(0)
 }

@@ -4,7 +4,6 @@ package dev.slne.surf.seasonalevents.paper.gui
 
 import com.github.shynixn.mccoroutine.folia.entityDispatcher
 import com.github.shynixn.mccoroutine.folia.launch
-import dev.slne.surf.api.core.messages.adventure.buildText
 import dev.slne.surf.api.paper.dialog.base
 import dev.slne.surf.api.paper.dialog.dialog
 import dev.slne.surf.api.paper.dialog.type
@@ -14,7 +13,6 @@ import dev.slne.surf.seasonalevents.api.result.UpdateLootResult
 import dev.slne.surf.seasonalevents.core.client.rpc.RpcOutcome
 import dev.slne.surf.seasonalevents.core.client.rpc.lootRpc
 import dev.slne.surf.seasonalevents.core.client.rpc.rpcCall
-import dev.slne.surf.seasonalevents.paper.command.errorMessage
 import dev.slne.surf.seasonalevents.paper.command.message
 import dev.slne.surf.seasonalevents.paper.command.unavailableMessage
 import dev.slne.surf.seasonalevents.paper.plugin
@@ -86,15 +84,7 @@ fun deletePackageDialog(event: SeasonalEvent, lootPackage: LootPackage): Dialog 
                     playerCallback { player ->
                         plugin.launch {
                             val outcome = rpcCall { lootRpc.delete(lootPackage.id) }
-                            player.sendMessage(
-                                when {
-                                    outcome !is RpcOutcome.Ok -> unavailableMessage()
-                                    outcome.value -> buildText {
-                                        appendSuccessPrefix(); success("Paket gelöscht.")
-                                    }
-                                    else -> errorMessage("Das Paket gibt es nicht mehr.")
-                                },
-                            )
+                            player.sendMessage(if (outcome is RpcOutcome.Ok) outcome.value.message() else unavailableMessage())
                             withContext(plugin.entityDispatcher(player)) { openLootOverview(player, event) }
                         }
                     }

@@ -10,7 +10,6 @@ import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.update
 import dev.slne.surf.seasonalevents.api.event.EventMode
 import dev.slne.surf.seasonalevents.api.event.EventState
 import dev.slne.surf.seasonalevents.api.event.SeasonalEvent
-import dev.slne.surf.seasonalevents.microservice.db.table.EventMarkersTable
 import dev.slne.surf.seasonalevents.microservice.db.table.SeasonalEventsTable
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.single
@@ -78,14 +77,6 @@ object EventRepository {
             }
             findById(id)
         }
-
-    suspend fun countMarkers(eventId: ULong): Int = suspendTransaction {
-        EventMarkersTable.selectAll().where { EventMarkersTable.eventId eq eventId }.count().toInt()
-    }
-
-    /** Counts only packages with items; empty packages may exist but cannot be handed out. */
-    suspend fun countPackages(eventId: ULong): Int =
-        LootRepository.findByEvent(eventId).count { it.items.isNotEmpty() }
 
     suspend fun findAll(): List<SeasonalEvent> = suspendTransaction {
         SeasonalEventsTable.selectAll()

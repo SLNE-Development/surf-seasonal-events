@@ -7,6 +7,7 @@ import org.bukkit.Bukkit
 import org.bukkit.Location
 import org.bukkit.block.Block
 import org.bukkit.block.Skull
+import org.bukkit.block.TileState
 import java.util.UUID
 
 /** Saves and restores a real block, including rotation and the texture of a player head. */
@@ -27,6 +28,16 @@ object BlockSnapshot {
     }
 
     private fun Collection<ProfileProperty>.textures() = firstOrNull { it.name == "textures" }?.value
+
+    /**
+     * Whether [block] can be marked without losing anything. Only the block data and a head's texture
+     * are stored, so blocks with further contents or data (chests, signs, banners …) are refused.
+     * Must run on the region thread that owns [block].
+     */
+    fun isSupported(block: Block): Boolean {
+        val state = block.getState(false)
+        return state !is TileState || state is Skull
+    }
 
     /** Must run on the region thread that owns [block]. */
     fun capture(block: Block) = Snapshot(block.blockData.asString, (block.state as? Skull)?.profile)

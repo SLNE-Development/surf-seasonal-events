@@ -1,7 +1,6 @@
 package dev.slne.surf.seasonalevents.microservice.logic
 
 import dev.slne.surf.seasonalevents.api.event.EventMode
-import dev.slne.surf.seasonalevents.api.loot.LootPackage
 import java.time.LocalDate
 import kotlin.random.Random
 import kotlin.test.Test
@@ -15,8 +14,7 @@ class PackagePickerTest {
 
     private val today = LocalDate.of(2026, 12, 3)
 
-    private fun pkg(id: Int, fixedDay: LocalDate? = null) =
-        LootPackage(id.toULong(), 1u, "package-$id", byteArrayOf(), fixedDay)
+    private fun pkg(id: Int, fixedDay: LocalDate? = null) = PackageRef(id.toULong(), fixedDay)
 
     private val todays = pkg(1, today)
     private val christmasEve = pkg(2, LocalDate.of(2026, 12, 24))
