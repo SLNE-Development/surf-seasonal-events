@@ -23,9 +23,11 @@ Two modes:
 
 ## Running locally
 
-Requirements: JDK 25, MariaDB, RabbitMQ.
+Requirements: JDK 25, MariaDB or PostgreSQL, RabbitMQ.
 
-1. Create a MariaDB database `seasonal_events`.
+1. Create a database `seasonal_events`. Both MariaDB and PostgreSQL work; pick one with
+   `database-type: MARIADB` or `database-type: POSTGRESQL` in `database.yml` (for PostgreSQL also set
+   `schema`, default `public`). Loot packages are limited to 60 KB because of MariaDB's `BLOB` size.
 2. Start the microservice once from `run/` so it writes `run/config/database.yml` and
    `run/config/rabbitmq.yml`, fill in the credentials and start it again:
    ```sh
