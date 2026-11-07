@@ -7,6 +7,8 @@ import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.transactions.s
 import dev.slne.surf.microservice.api.microservice.Microservice
 import dev.slne.surf.rabbitmq.api.ServerRabbitMQApi
 import dev.slne.surf.seasonalevents.core.SeasonalEventsSerializerModule
+import dev.slne.surf.seasonalevents.core.rpc.EventRpcService
+import dev.slne.surf.seasonalevents.microservice.rpc.EventRpcServiceImpl
 import dev.slne.surf.seasonalevents.microservice.db.table.CollectionsTable
 import dev.slne.surf.seasonalevents.microservice.db.table.DailyAssignmentsTable
 import dev.slne.surf.seasonalevents.microservice.db.table.EventMarkersTable
@@ -33,8 +35,7 @@ class SeasonalEventsMicroservice : Microservice() {
     override suspend fun onBootstrap(args: List<String>) {
         createTables()
 
-        // RPC services are registered here once they are implemented.
-
+        rabbitApi.registerRpcService<EventRpcService>(EventRpcServiceImpl)
         rabbitApi.freezeAndConnect()
     }
 
