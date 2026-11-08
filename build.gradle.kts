@@ -1,16 +1,15 @@
-plugins {
-    id("dev.slne.surf.surfapi.gradle.paper-plugin") version "1.21.11+"
+buildscript {
+    repositories {
+        gradlePluginPortal()
+        maven("https://reposilite.slne.dev/releases")
+    }
+    dependencies {
+        classpath("dev.slne.surf.api:surf-api-gradle-plugin:+")
+        classpath("dev.slne.surf.microservice:surf-microservice-gradle-plugin:+")
+    }
 }
 
-surfPaperPluginApi {
-    mainClass("dev.slne.surf.gift.PaperMain")
-    generateLibraryLoader(false)
-    foliaSupported(true)
-
-    authors.add("Jo_field")
-
-    withSurfDatabaseR2dbc("1.3.0", "dev.slne.surf.gift.libs")
+allprojects {
+    group = "dev.slne.surf.seasonalevents"
+    version = findProperty("version") as String
 }
-
-version = findProperty("version") as String
-group = "dev.slne.surf.gift"

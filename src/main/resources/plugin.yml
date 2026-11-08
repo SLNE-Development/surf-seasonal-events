@@ -1,4 +1,0 @@
-name: surf-easter-search
-version: '1.21.11-1.0.0'
-main: dev.slne.surf.surfEasterSearch.SurfEasterSearch
-api-version: '1.21'
