@@ -1,8 +1,23 @@
 package dev.slne.surf.seasonalevents.api.progress
 
 import dev.slne.surf.seasonalevents.api.event.SeasonalEvent
-import dev.slne.surf.seasonalevents.api.marker.MarkerPosition
 import kotlinx.serialization.Serializable
+
+/** A player's situation on the current day of a daily event. */
+@Serializable
+enum class DailyToday {
+    /** Today's block is waiting to be found. */
+    HIDDEN,
+
+    /** The player already found today's block. */
+    COLLECTED,
+
+    /** The player already received every package of the event. */
+    NOTHING_LEFT,
+
+    /** The player has no block today. */
+    NO_BLOCK,
+}
 
 /** A player's progress in the active event, shown by `/seasonalevents`. */
 @Serializable
@@ -15,12 +30,12 @@ sealed interface PlayerStatus {
     @Serializable
     data class Daily(
         val event: SeasonalEvent,
-        /** Where today's marker is; null if the player has no assignment today. */
-        val position: MarkerPosition?,
-        /** Whether the player already collected today's marker. */
-        val collectedToday: Boolean,
-        /** Whether the player already received every package of this event. */
-        val nothingLeft: Boolean,
+        /** How today looks for the player. */
+        val today: DailyToday,
+        /** Number of packages the player has received. */
+        val found: Int,
+        /** Number of packages the player can receive in total: those received plus those still open. */
+        val total: Int,
     ) : PlayerStatus
 
     /** Progress in a [dev.slne.surf.seasonalevents.api.event.EventMode.COLLECT] event. */

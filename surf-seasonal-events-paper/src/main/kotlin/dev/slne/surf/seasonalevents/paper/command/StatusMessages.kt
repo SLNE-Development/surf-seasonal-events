@@ -1,13 +1,14 @@
 package dev.slne.surf.seasonalevents.paper.command
 
 import dev.slne.surf.api.core.messages.adventure.buildText
-import dev.slne.surf.api.core.messages.builder.SurfComponentBuilder
 import dev.slne.surf.seasonalevents.api.event.SeasonalEvent
+import dev.slne.surf.seasonalevents.api.progress.DailyToday
 import dev.slne.surf.seasonalevents.api.progress.PlayerStatus
 import net.kyori.adventure.text.Component
-import org.bukkit.Bukkit
 
 // What `/seasonalevents` without a subcommand shows a player.
+
+private const val PROGRESS_BAR_SEGMENTS = 20
 
 fun PlayerStatus.message(): Component = when (this) {
     PlayerStatus.NoActiveEvent -> buildText {
@@ -15,46 +16,41 @@ fun PlayerStatus.message(): Component = when (this) {
         info("Gerade läuft kein Event.")
     }
 
-    is PlayerStatus.Daily -> statusMessage(event) {
-        val position = position
-        when {
-            nothingLeft && !collectedToday -> info("Du hast schon alle Belohnungen dieses Events erhalten.")
-            collectedToday -> info("Deinen Block für heute hast du schon gefunden. Morgen wartet ein neuer!")
-            position != null -> {
-                info("Dein Block für heute ist bei ")
-                variableValue("${position.x}, ${position.y}, ${position.z}")
-                Bukkit.getWorld(position.world)?.let { spacer(" (${it.name})") }
-                info(".")
-            }
+    is PlayerStatus.Daily -> statusMessage(event, listOf(progressRow(found, total), todayRow(today)))
 
-            else -> info("Für dich ist heute kein Block da.")
-        }
-    }
+    is PlayerStatus.Collect -> statusMessage(
+        event,
+        listOfNotNull(
+            progressRow(found, total),
+            remainingToday?.let { remaining -> panelRow("Heute noch") { variableValue(remaining) } },
+        ),
+    )
+}
 
-    is PlayerStatus.Collect -> statusMessage(event) {
-        info("Gefunden: ")
-        variableValue("$found/$total")
-        if (remainingToday != null) {
-            info(", heute noch ")
-            variableValue(remainingToday.toString())
-        }
-        info(".")
+private fun todayRow(today: DailyToday): Component = panelRow("Heute") {
+    when (today) {
+        DailyToday.HIDDEN -> info("Dein Block ist noch versteckt. Such ihn!")
+        DailyToday.COLLECTED -> success("Block gefunden, morgen wartet ein neuer!")
+        DailyToday.NOTHING_LEFT -> success("Alle Belohnungen erhalten!")
+        DailyToday.NO_BLOCK -> spacer("Für dich ist heute kein Block da.")
     }
 }
 
-/** Header with the event's display name, the [body] line and, if set, the end date. */
-private fun statusMessage(
-    event: SeasonalEvent,
-    body: SurfComponentBuilder.() -> Unit,
-) = buildText {
-    appendInfoPrefix()
-    append(event.displayNameComponent())
-    appendNewInfoPrefixedLine(body)
-    event.endsAt?.let { endsAt ->
-        appendNewInfoPrefixedLine {
-            info("Endet am ")
-            variableValue(endsAt.formatted())
-            info(".")
-        }
-    }
+/** A bar of [PROGRESS_BAR_SEGMENTS] segments followed by the count `found/total`. */
+private fun progressRow(found: Int, total: Int): Component = panelRow("Fortschritt") {
+    val filled = if (total > 0) found.coerceIn(0, total) * PROGRESS_BAR_SEGMENTS / total else 0
+    success("|".repeat(filled))
+    darkSpacer("|".repeat(PROGRESS_BAR_SEGMENTS - filled))
+    spacer(" ")
+    variableValue("$found/$total")
 }
+
+/** The event's panel with its mode, the given [rows] and, if set, the end date. */
+private fun statusMessage(event: SeasonalEvent, rows: List<Component>): Component = eventPanel(
+    event,
+    buildList {
+        add(panelRow("Modus") { variableValue(event.mode.german) })
+        addAll(rows)
+        event.endsAt?.let { endsAt -> add(panelRow("Endet") { variableValue(endsAt.formatted()) }) }
+    },
+)

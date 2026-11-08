@@ -1,11 +1,32 @@
 package dev.slne.surf.seasonalevents.microservice.logic
 
+import dev.slne.surf.seasonalevents.api.progress.DailyToday
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
-/** Verifies the numbers shown by `/seasonalevents` in a `COLLECT` event. */
+/** Verifies what `/seasonalevents` shows for the active event. */
 class StatusRulesTest {
+
+    @Test
+    fun `a block waiting today is hidden`() {
+        assertEquals(DailyToday.HIDDEN, StatusRules.dailyToday(collectedToday = false, hasBlock = true, openPackages = 2))
+    }
+
+    @Test
+    fun `finding the last block still reads as found today`() {
+        assertEquals(DailyToday.COLLECTED, StatusRules.dailyToday(collectedToday = true, hasBlock = true, openPackages = 0))
+    }
+
+    @Test
+    fun `nothing left wins over an assigned block`() {
+        assertEquals(DailyToday.NOTHING_LEFT, StatusRules.dailyToday(collectedToday = false, hasBlock = true, openPackages = 0))
+    }
+
+    @Test
+    fun `open packages without a block today mean no block`() {
+        assertEquals(DailyToday.NO_BLOCK, StatusRules.dailyToday(collectedToday = false, hasBlock = false, openPackages = 2))
+    }
 
     @Test
     fun `total is the marker count while every found marker still exists`() {

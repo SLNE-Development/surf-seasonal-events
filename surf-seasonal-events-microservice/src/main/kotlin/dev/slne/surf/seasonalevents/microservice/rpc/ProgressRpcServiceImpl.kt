@@ -125,30 +125,34 @@ class ProgressRpcServiceImpl(
         val event = events.getActiveEvent() ?: return@suspendTransaction PlayerStatus.NoActiveEvent
         val today = clock.today()
         val collectedToday = CollectionRepository.countOnDay(event.id, player, today)
+        val found = CollectionRepository.count(event.id, player)
 
         when (event.mode) {
-            EventMode.DAILY -> PlayerStatus.Daily(
-                event = event,
-                position = AssignmentRepository.find(event.id, player, today)
-                    ?.let { MarkerRepository.findById(it) }
-                    ?.position,
-                collectedToday = collectedToday > 0,
-                nothingLeft = openPackages(event.id, player).isEmpty(),
-            )
-
-            EventMode.COLLECT -> {
-                val found = CollectionRepository.count(event.id, player)
-                PlayerStatus.Collect(
+            EventMode.DAILY -> {
+                val open = openPackages(event.id, player).size
+                PlayerStatus.Daily(
                     event = event,
-                    found = found,
-                    total = StatusRules.collectTotal(
-                        found = found,
-                        foundStillMarked = CollectionRepository.collectedMarkerIds(event.id, player).size,
-                        markerCount = MarkerRepository.count(event.id),
+                    today = StatusRules.dailyToday(
+                        collectedToday = collectedToday > 0,
+                        hasBlock = AssignmentRepository.find(event.id, player, today)
+                            ?.let { MarkerRepository.findById(it) } != null,
+                        openPackages = open,
                     ),
-                    remainingToday = StatusRules.remainingToday(event.dailyLimit, collectedToday),
+                    found = found,
+                    total = found + open,
                 )
             }
+
+            EventMode.COLLECT -> PlayerStatus.Collect(
+                event = event,
+                found = found,
+                total = StatusRules.collectTotal(
+                    found = found,
+                    foundStillMarked = CollectionRepository.collectedMarkerIds(event.id, player).size,
+                    markerCount = MarkerRepository.count(event.id),
+                ),
+                remainingToday = StatusRules.remainingToday(event.dailyLimit, collectedToday),
+            )
         }
     }
 

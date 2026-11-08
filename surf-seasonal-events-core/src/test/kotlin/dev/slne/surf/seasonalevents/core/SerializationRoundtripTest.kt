@@ -7,6 +7,7 @@ import dev.slne.surf.seasonalevents.api.event.SeasonalEvent
 import dev.slne.surf.seasonalevents.api.loot.LootPackage
 import dev.slne.surf.seasonalevents.api.marker.EventMarker
 import dev.slne.surf.seasonalevents.api.marker.MarkerPosition
+import dev.slne.surf.seasonalevents.api.progress.DailyToday
 import dev.slne.surf.seasonalevents.api.progress.PlayerStatus
 import dev.slne.surf.seasonalevents.api.progress.PlayerView
 import dev.slne.surf.seasonalevents.api.result.*
@@ -126,8 +127,7 @@ class SerializationRoundtripTest {
     fun `every player status case survives roundtrip`() {
         val cases: List<PlayerStatus> = listOf(
             PlayerStatus.NoActiveEvent,
-            PlayerStatus.Daily(event, marker.position, collectedToday = false, nothingLeft = false),
-            PlayerStatus.Daily(event, null, collectedToday = true, nothingLeft = true),
+            *DailyToday.entries.map { PlayerStatus.Daily(event, it, found = 3, total = 24) }.toTypedArray(),
             PlayerStatus.Collect(event.copy(mode = EventMode.COLLECT), found = 12, total = 40, remainingToday = 3),
             PlayerStatus.Collect(event.copy(mode = EventMode.COLLECT), found = 0, total = 40, remainingToday = null),
         )

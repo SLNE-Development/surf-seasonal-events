@@ -2,6 +2,7 @@ package dev.slne.surf.seasonalevents.paper.command
 
 import dev.slne.surf.api.core.messages.adventure.buildText
 import dev.slne.surf.api.core.messages.builder.SurfComponentBuilder
+import dev.slne.surf.api.core.messages.pagination.Pagination
 import dev.slne.surf.api.core.minimessage.miniMessage
 import dev.slne.surf.api.core.util.dateTimeFormatter
 import dev.slne.surf.seasonalevents.api.SeasonalTime
@@ -33,13 +34,20 @@ private val EventState.german
         EventState.ENDED -> "Beendet"
     }
 
-private val EventMode.german
+internal val EventMode.german
     get() = when (this) {
         EventMode.DAILY -> "Täglich"
         EventMode.COLLECT -> "Sammeln"
     }
 
-fun unavailableMessage() = errorMessage("Das Event-System ist gerade nicht erreichbar.")
+/** Appends the state's German name in the color that signals it. */
+private fun SurfComponentBuilder.eventState(state: EventState) = when (state) {
+    EventState.DRAFT -> warning(state.german)
+    EventState.ACTIVE -> success(state.german)
+    EventState.ENDED -> error(state.german)
+}
+
+fun unavailableMessage() =errorMessage("Das Event-System ist gerade nicht erreichbar.")
 
 fun errorMessage(text: String) = buildText {
     appendErrorPrefix()
@@ -53,40 +61,56 @@ private fun successMessage(event: String, text: String) = buildText {
     success(" $text")
 }
 
-fun eventListMessage(events: List<SeasonalEvent>): Component = buildText {
-    appendInfoPrefix()
+fun eventListMessage(events: List<SeasonalEvent>): Component {
     if (events.isEmpty()) {
-        info("Es gibt noch keine Events.")
-        return@buildText
-    }
-
-    info("Events (${events.size}):")
-    for (event in events.sortedByDescending { it.createdAt }) {
-        appendNewInfoPrefixedLine {
-            variableValue(event.name)
-            spacer(" - ")
-            append(event.displayNameComponent())
-            spacer(" - ${event.mode.german}, ${event.state.german}")
+        return buildText {
+            appendInfoPrefix()
+            info("Es gibt noch keine Events.")
         }
     }
+
+    return Pagination<SeasonalEvent> {
+        title { primary("Events (${events.size})") }
+        rowRendererSimple { event ->
+            buildText {
+                variableValue(event.name)
+                spacer(" - ")
+                append(event.displayNameComponent())
+                spacer(" - ${event.mode.german}, ")
+                eventState(event.state)
+            }
+        }
+    }.renderComponent(events.sortedByDescending { it.createdAt })
 }
 
-fun eventInfoMessage(event: SeasonalEvent): Component = buildText {
-    appendInfoPrefix()
-    info("Event ")
-    variableValue(event.name)
-    fun line(key: String, value: Any) = appendNewInfoPrefixedLine {
-        variableKey("$key: ")
-        variableValue(value.toString())
-    }
-    appendNewInfoPrefixedLine { variableKey("Anzeigename: "); append(event.displayNameComponent()) }
-    line("Modus", event.mode.german)
-    line("Zustand", event.state.german)
-    line("Marker-Limit", event.markerLimit)
-    line("Tageslimit", if (event.dailyLimit > 0) event.dailyLimit else "keins")
-    line("Erstellt", event.createdAt.formatted())
-    line("Gestartet", event.startedAt.formatted())
-    line("Ende", event.endsAt.formatted())
+/** Framed panel titled with the event's display name, one line per entry of the non-empty [rows]. */
+internal fun eventPanel(event: SeasonalEvent, rows: List<Component>): Component = Pagination<Component> {
+    title = event.displayNameComponent()
+    resultsPerPage = rows.size
+    rowRendererSimple { it }
+}.renderComponent(rows)
+
+/** A `key: value` line of an [eventPanel]. */
+internal fun panelRow(key: String, value: SurfComponentBuilder.() -> Unit): Component = buildText {
+    variableKey("$key: ")
+    value()
+}
+
+fun eventInfoMessage(event: SeasonalEvent): Component {
+    fun line(key: String, value: Any) = panelRow(key) { variableValue(value.toString()) }
+    return eventPanel(
+        event,
+        listOf(
+            line("Name", event.name),
+            line("Modus", event.mode.german),
+            panelRow("Zustand") { eventState(event.state) },
+            line("Marker-Limit", event.markerLimit),
+            line("Tageslimit", if (event.dailyLimit > 0) event.dailyLimit else "keins"),
+            line("Erstellt", event.createdAt.formatted()),
+            line("Gestartet", event.startedAt.formatted()),
+            line("Ende", event.endsAt.formatted()),
+        ),
+    )
 }
 
 fun CreateEventResult.message(name: String): Component = when (this) {

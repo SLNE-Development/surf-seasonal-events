@@ -1,7 +1,24 @@
 package dev.slne.surf.seasonalevents.microservice.logic
 
-/** Numbers shown by `/seasonalevents` for a `COLLECT` event. */
+import dev.slne.surf.seasonalevents.api.progress.DailyToday
+
+/** What `/seasonalevents` shows for the active event. */
 object StatusRules {
+
+    /**
+     * The player's situation today in a `DAILY` event. Having found today's block wins over having
+     * received everything, so the last block of the event still reads as found until the next day.
+     *
+     * @param collectedToday whether the player already collected today
+     * @param hasBlock whether the player has an existing block assigned today
+     * @param openPackages filled packages the player has not received yet
+     */
+    fun dailyToday(collectedToday: Boolean, hasBlock: Boolean, openPackages: Int): DailyToday = when {
+        collectedToday -> DailyToday.COLLECTED
+        openPackages == 0 -> DailyToday.NOTHING_LEFT
+        hasBlock -> DailyToday.HIDDEN
+        else -> DailyToday.NO_BLOCK
+    }
 
     /**
      * Total number of markers for the "found x of y" line. Markers unmarked after the player found them
