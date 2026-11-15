@@ -47,12 +47,6 @@ object CollectService {
         }
     }
 
-    /** Forgets everything about [player] when they leave. */
-    fun forget(player: UUID) {
-        cooldown.forget(player)
-        busy.remove(player)
-    }
-
     private suspend fun collect(player: Player, marker: EventMarker) {
         val preview = when (val outcome = rpcCall { progressRpc.previewCollect(player.uniqueId, marker.id) }) {
             is RpcOutcome.Unavailable -> return player.sendMessage(unavailableMessage())

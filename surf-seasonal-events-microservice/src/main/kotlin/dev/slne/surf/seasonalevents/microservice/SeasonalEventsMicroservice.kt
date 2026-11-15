@@ -6,7 +6,6 @@ import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.SchemaUtils
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.transactions.suspendTransaction
 import dev.slne.surf.microservice.api.microservice.Microservice
 import dev.slne.surf.rabbitmq.api.ServerRabbitMQApi
-import dev.slne.surf.seasonalevents.core.SeasonalEventsSerializerModule
 import dev.slne.surf.seasonalevents.core.rpc.EventRpcService
 import dev.slne.surf.seasonalevents.core.rpc.LootRpcService
 import dev.slne.surf.seasonalevents.core.rpc.MarkerRpcService
@@ -31,7 +30,7 @@ import kotlin.io.path.Path
 class SeasonalEventsMicroservice : Microservice() {
     override val dataPath = Path("config")
     val databaseApi = DatabaseApi.create(dataPath)
-    val rabbitApi = ServerRabbitMQApi.create("surf-seasonal-events", dataPath, SeasonalEventsSerializerModule.module)
+    val rabbitApi = ServerRabbitMQApi.create("surf-seasonal-events", dataPath)
 
     override suspend fun onBootstrap(args: List<String>) {
         createTables()

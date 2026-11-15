@@ -2,6 +2,7 @@ package dev.slne.surf.seasonalevents.api.event
 
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
+import net.kyori.adventure.text.Component
 import java.time.Instant
 
 /** A seasonal event such as Easter, Halloween or Christmas. */
@@ -10,8 +11,8 @@ data class SeasonalEvent(
     val id: ULong,
     /** Unique technical name used in commands, e.g. `christmas-2026`. */
     val name: String,
-    /** Name shown to players, in MiniMessage format. */
-    val displayName: String,
+    /** Name shown to players. */
+    val displayName: @Contextual Component,
     val mode: EventMode,
     val state: EventState,
     /** Maximum number of blocks that can be marked for this event. */
@@ -28,7 +29,7 @@ data class SeasonalEvent(
         /** Longest allowed [name]; matches the database column. */
         const val MAX_NAME_LENGTH = 64
 
-        /** Longest allowed [displayName] including MiniMessage tags; matches the database column. */
-        const val MAX_DISPLAY_NAME_LENGTH = 255
+        /** Longest allowed [displayName], counted in visible characters without formatting. */
+        const val MAX_DISPLAY_NAME_LENGTH = 64
     }
 }

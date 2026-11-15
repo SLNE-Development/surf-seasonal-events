@@ -1,7 +1,6 @@
 package dev.slne.surf.seasonalevents.core.client.rabbit
 
 import dev.slne.surf.rabbitmq.api.ClientRabbitMQApi
-import dev.slne.surf.seasonalevents.core.SeasonalEventsSerializerModule
 import java.nio.file.Path
 
 /** RabbitMQ connection of a plugin to the seasonal events microservice. */
@@ -16,11 +15,7 @@ object RabbitService {
      * which is created with defaults on the first start.
      */
     suspend fun connect(dataPath: Path) {
-        rabbitApi = ClientRabbitMQApi.create(
-            "surf-seasonal-events",
-            dataPath,
-            SeasonalEventsSerializerModule.module,
-        )
+        rabbitApi = ClientRabbitMQApi.create("surf-seasonal-events", dataPath)
         rabbitApi.freezeAndConnect()
     }
 

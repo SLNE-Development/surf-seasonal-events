@@ -6,6 +6,8 @@ import dev.slne.surf.seasonalevents.api.result.CreateEventResult
 import dev.slne.surf.seasonalevents.api.result.DeleteEventResult
 import dev.slne.surf.seasonalevents.api.result.StartEventResult
 import dev.slne.surf.seasonalevents.api.result.UpdateEventResult
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import java.time.Instant
 
 /** Rules for creating, changing, starting, ending and deleting events. Each check returns null if allowed. */
@@ -21,10 +23,11 @@ object EventRules {
         return null
     }
 
-    /** Refuses changes to an ended event and a blank or too long display name. */
-    fun checkDisplayName(event: SeasonalEvent, displayName: String): UpdateEventResult? {
+    /** Refuses changes to an ended event and a display name whose visible text is blank or too long. */
+    fun checkDisplayName(event: SeasonalEvent, displayName: Component): UpdateEventResult? {
         if (event.state == EventState.ENDED) return UpdateEventResult.AlreadyEnded
-        if (displayName.isBlank() || displayName.length > SeasonalEvent.MAX_DISPLAY_NAME_LENGTH) {
+        val visible = PlainTextComponentSerializer.plainText().serialize(displayName)
+        if (visible.isBlank() || visible.length > SeasonalEvent.MAX_DISPLAY_NAME_LENGTH) {
             return UpdateEventResult.InvalidDisplayName
         }
         return null

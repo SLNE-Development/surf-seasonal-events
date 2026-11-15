@@ -1,5 +1,6 @@
 package dev.slne.surf.seasonalevents.microservice.db.table
 
+import dev.slne.surf.database.columns.component
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.javatime.timestamp
 import dev.slne.surf.database.table.AuditableLongIdTable
 import dev.slne.surf.seasonalevents.api.event.EventMode
@@ -10,8 +11,8 @@ object SeasonalEventsTable : AuditableLongIdTable("seasonal_events") {
     /** Unique technical name, e.g. `christmas-2026`. */
     val name = varchar("name", 64).uniqueIndex("seasonal_events_name_uq")
 
-    /** MiniMessage name shown to players. */
-    val displayName = varchar("display_name", 255)
+    /** Name shown to players, stored as JSON. */
+    val displayName = component("display_name")
     val mode = enumerationByName<EventMode>("mode", 16)
     val state = enumerationByName<EventState>("state", 16).default(EventState.DRAFT)
     val markerLimit = integer("marker_limit")

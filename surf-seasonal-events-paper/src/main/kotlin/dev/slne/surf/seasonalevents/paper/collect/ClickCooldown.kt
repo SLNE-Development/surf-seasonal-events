@@ -1,39 +1,33 @@
 package dev.slne.surf.seasonalevents.paper.collect
 
+import com.github.benmanes.caffeine.cache.Cache
+import com.github.benmanes.caffeine.cache.Caffeine
+import com.github.benmanes.caffeine.cache.Ticker
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.toJavaDuration
 
 /**
  * Lets each player trigger an action at most once per [cooldown], so spam clicks do not turn into
- * a flood of microservice calls. Thread-safe.
+ * a flood of microservice calls. Entries expire on their own, so nothing has to be cleaned up when a
+ * player leaves. Thread-safe.
  *
- * @param nanoTime source of monotonic time; replaceable in tests
+ * @param ticker source of monotonic time in nanoseconds; replaceable in tests
  */
 class ClickCooldown(
-    private val cooldown: Duration = 500.milliseconds,
-    private val nanoTime: () -> Long = System::nanoTime,
+    cooldown: Duration = 500.milliseconds,
+    ticker: Ticker = Ticker.systemTicker(),
 ) {
-    private val lastAccepted = ConcurrentHashMap<UUID, Long>()
+    private val running: Cache<UUID, Unit> = Caffeine.newBuilder()
+        .expireAfterWrite(cooldown.toJavaDuration())
+        .ticker(ticker)
+        .build()
 
     /** Returns true and starts the cooldown if [player] may act now, false while the cooldown runs. */
     fun tryAcquire(player: UUID): Boolean {
-        val now = nanoTime()
         var accepted = false
-        lastAccepted.compute(player) { _, last ->
-            if (last == null || now - last >= cooldown.inWholeNanoseconds) {
-                accepted = true
-                now
-            } else {
-                last
-            }
-        }
+        running.asMap().computeIfAbsent(player) { accepted = true }
         return accepted
-    }
-
-    /** Forgets [player], e.g. when they leave. */
-    fun forget(player: UUID) {
-        lastAccepted.remove(player)
     }
 }

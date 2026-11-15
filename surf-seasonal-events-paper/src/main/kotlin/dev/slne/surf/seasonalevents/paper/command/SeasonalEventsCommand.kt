@@ -75,11 +75,11 @@ fun seasonalEventsCommand() = commandTree("seasonalevents") {
     literalArgument("displayname") {
         withPermission(SeasonalEventsPermissions.COMMAND_EDIT)
         argument(SeasonalEventArgument("event")) {
-            // Parsed as MiniMessage so a broken tag fails right here; the raw text is what gets stored.
+            // Parsed with the surf MiniMessage tags; a broken tag fails right here.
             argument(MiniMessageArgument("displayName", greedy = true)) {
                 anyExecutorSuspend { sender, args ->
                     val event: SeasonalEvent = args.awaiting("event")
-                    val displayName = args.getRaw("displayName").orEmpty().trim()
+                    val displayName = args["displayName"] as Component
                     sender.reply({ eventRpc.setDisplayName(event.id, displayName) }) { it.message() }
                 }
             }

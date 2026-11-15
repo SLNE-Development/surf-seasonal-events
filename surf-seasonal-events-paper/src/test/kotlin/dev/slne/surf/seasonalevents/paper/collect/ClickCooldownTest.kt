@@ -28,15 +28,17 @@ class ClickCooldownTest {
     }
 
     @Test
-    fun `players have separate cooldowns`() {
+    fun `refused clicks do not extend the cooldown`() {
         assertTrue(cooldown.tryAcquire(alice))
-        assertTrue(cooldown.tryAcquire(bob))
+        advance(400)
+        assertFalse(cooldown.tryAcquire(alice))
+        advance(100)
+        assertTrue(cooldown.tryAcquire(alice))
     }
 
     @Test
-    fun `a forgotten player may click right away`() {
+    fun `players have separate cooldowns`() {
         assertTrue(cooldown.tryAcquire(alice))
-        cooldown.forget(alice)
-        assertTrue(cooldown.tryAcquire(alice))
+        assertTrue(cooldown.tryAcquire(bob))
     }
 }

@@ -15,7 +15,8 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.cbor.Cbor
 import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.encodeToByteArray
-import kotlinx.serialization.modules.plus
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.time.LocalDate
@@ -24,10 +25,10 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
-/** Same CBOR setup surf-rabbitmq uses: surf-api defaults plus our own module. */
+/** Same serializers surf-rabbitmq uses: the surf-api defaults. */
 @OptIn(ExperimentalSerializationApi::class)
 private val cbor = Cbor {
-    serializersModule = SurfSerializerModule.all + SeasonalEventsSerializerModule.module
+    serializersModule = SurfSerializerModule.all
 }
 
 /** Encodes [value] to bytes and decodes it again, like a trip through RabbitMQ. */
@@ -44,7 +45,7 @@ class SerializationRoundtripTest {
     private val event = SeasonalEvent(
         id = 1u,
         name = "christmas-2026",
-        displayName = "<red>Adventskalender",
+        displayName = Component.text("Adventskalender", NamedTextColor.RED),
         mode = EventMode.DAILY,
         state = EventState.ACTIVE,
         markerLimit = 24,

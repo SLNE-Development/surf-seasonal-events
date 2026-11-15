@@ -3,7 +3,6 @@ package dev.slne.surf.seasonalevents.paper.command
 import dev.slne.surf.api.core.messages.adventure.buildText
 import dev.slne.surf.api.core.messages.builder.SurfComponentBuilder
 import dev.slne.surf.api.core.messages.pagination.Pagination
-import dev.slne.surf.api.core.minimessage.miniMessage
 import dev.slne.surf.api.core.util.dateTimeFormatter
 import dev.slne.surf.seasonalevents.api.SeasonalTime
 import dev.slne.surf.seasonalevents.api.event.EventMode
@@ -23,9 +22,6 @@ private val eventDateTime = dateTimeFormatter.withZone(SeasonalTime.ZONE)
 
 /** The instant as event-local date and time, e.g. "24.12.2026 23:59"; "-" for null. */
 internal fun Instant?.formatted(): String = this?.let(eventDateTime::format) ?: "-"
-
-/** The display name with the surf MiniMessage tags (`<primary>`, `<success>` …) resolved. */
-internal fun SeasonalEvent.displayNameComponent(): Component = miniMessage.deserialize(displayName)
 
 private val EventState.german
     get() = when (this) {
@@ -75,7 +71,7 @@ fun eventListMessage(events: List<SeasonalEvent>): Component {
             buildText {
                 variableValue(event.name)
                 spacer(" - ")
-                append(event.displayNameComponent())
+                append(event.displayName)
                 spacer(" - ${event.mode.german}, ")
                 eventState(event.state)
             }
@@ -85,7 +81,7 @@ fun eventListMessage(events: List<SeasonalEvent>): Component {
 
 /** Framed panel titled with the event's display name, one line per entry of the non-empty [rows]. */
 internal fun eventPanel(event: SeasonalEvent, rows: List<Component>): Component = Pagination<Component> {
-    title = event.displayNameComponent()
+    title = event.displayName
     resultsPerPage = rows.size
     rowRendererSimple { it }
 }.renderComponent(rows)
@@ -171,7 +167,7 @@ fun StartEventResult.message(event: SeasonalEvent): Component = when (this) {
 fun UpdateEventResult.message(): Component = when (this) {
     is UpdateEventResult.Success -> buildText {
         append(successMessage(event.name, "geändert. Anzeigename: "))
-        append(event.displayNameComponent())
+        append(event.displayName)
         success(", Ende: ")
         variableValue(event.endsAt?.formatted() ?: "kein Ende")
     }
@@ -183,7 +179,7 @@ fun UpdateEventResult.message(): Component = when (this) {
             error("Befülle zuerst ${needed - filled} weitere oder wähle ein früheres Ende.")
         }
     UpdateEventResult.InvalidDisplayName -> errorMessage(
-        "Der Anzeigename darf nicht leer und mit Tags höchstens ${SeasonalEvent.MAX_DISPLAY_NAME_LENGTH} Zeichen lang sein.",
+        "Der Anzeigename darf nicht leer und ohne Formatierung höchstens ${SeasonalEvent.MAX_DISPLAY_NAME_LENGTH} Zeichen lang sein.",
     )
 }
 

@@ -8,6 +8,7 @@ import dev.slne.surf.seasonalevents.api.result.DeleteEventResult
 import dev.slne.surf.seasonalevents.api.result.StartEventResult
 import dev.slne.surf.seasonalevents.api.result.StopEventResult
 import dev.slne.surf.seasonalevents.api.result.UpdateEventResult
+import net.kyori.adventure.text.Component
 import java.time.Instant
 
 /**
@@ -43,12 +44,12 @@ interface EventRpcService {
     suspend fun getActiveEvent(): SeasonalEvent?
 
     /**
-     * Sets the MiniMessage display name of an event.
+     * Sets the display name of an event.
      *
      * @return [UpdateEventResult.AlreadyEnded] if the event is `ENDED`,
-     * [UpdateEventResult.InvalidDisplayName] if the name is blank or too long
+     * [UpdateEventResult.InvalidDisplayName] if its visible text is blank or too long
      */
-    suspend fun setDisplayName(eventId: ULong, displayName: String): UpdateEventResult
+    suspend fun setDisplayName(eventId: ULong, displayName: Component): UpdateEventResult
 
     /**
      * Activates a `DRAFT` event.

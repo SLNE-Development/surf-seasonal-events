@@ -7,6 +7,9 @@ import dev.slne.surf.seasonalevents.api.result.CreateEventResult
 import dev.slne.surf.seasonalevents.api.result.DeleteEventResult
 import dev.slne.surf.seasonalevents.api.result.StartEventResult
 import dev.slne.surf.seasonalevents.api.result.UpdateEventResult
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.text.format.TextDecoration
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -18,7 +21,7 @@ import kotlin.test.assertTrue
 class EventRulesTest {
 
     private val draft = SeasonalEvent(
-        id = 1u, name = "christmas-2026", displayName = "Advent",
+        id = 1u, name = "christmas-2026", displayName = Component.text("Advent"),
         mode = EventMode.DAILY, state = EventState.DRAFT,
         markerLimit = 24, dailyLimit = 0,
         endsAt = null, startedAt = null, createdAt = Instant.parse("2026-11-01T00:00:00Z"),
@@ -135,22 +138,30 @@ class EventRulesTest {
 
     @Test
     fun `display name of a draft may change`() {
-        assertNull(EventRules.checkDisplayName(draft, "<red>Advent"))
+        assertNull(EventRules.checkDisplayName(draft, Component.text("Advent", NamedTextColor.RED)))
     }
 
     @Test
     fun `display name of an ended event cannot change`() {
         assertEquals(
             UpdateEventResult.AlreadyEnded,
-            EventRules.checkDisplayName(draft.copy(state = EventState.ENDED), "Advent"),
+            EventRules.checkDisplayName(draft.copy(state = EventState.ENDED), Component.text("Advent")),
         )
     }
 
     @Test
     fun `blank or too long display name is invalid`() {
-        assertEquals(UpdateEventResult.InvalidDisplayName, EventRules.checkDisplayName(draft, ""))
-        val tooLong = "a".repeat(SeasonalEvent.MAX_DISPLAY_NAME_LENGTH + 1)
+        assertEquals(UpdateEventResult.InvalidDisplayName, EventRules.checkDisplayName(draft, Component.empty()))
+        assertEquals(UpdateEventResult.InvalidDisplayName, EventRules.checkDisplayName(draft, Component.text("  ")))
+        val tooLong = Component.text("a".repeat(SeasonalEvent.MAX_DISPLAY_NAME_LENGTH + 1))
         assertEquals(UpdateEventResult.InvalidDisplayName, EventRules.checkDisplayName(draft, tooLong))
+    }
+
+    @Test
+    fun `formatting does not count towards the display name length`() {
+        val styled = Component.text("a".repeat(SeasonalEvent.MAX_DISPLAY_NAME_LENGTH), NamedTextColor.RED)
+            .decorate(TextDecoration.BOLD)
+        assertNull(EventRules.checkDisplayName(draft, styled))
     }
 
     // ---------- checkDelete ----------

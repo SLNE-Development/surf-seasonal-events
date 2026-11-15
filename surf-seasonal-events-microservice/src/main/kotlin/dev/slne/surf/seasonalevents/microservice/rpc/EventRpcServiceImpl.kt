@@ -16,6 +16,7 @@ import dev.slne.surf.seasonalevents.microservice.db.repository.MarkerRepository
 import dev.slne.surf.seasonalevents.microservice.logic.EventRules
 import dev.slne.surf.seasonalevents.microservice.logic.PackageRequirement
 import dev.slne.surf.seasonalevents.microservice.logic.SeasonalClock
+import net.kyori.adventure.text.Component
 import java.time.Instant
 
 /**
@@ -72,7 +73,7 @@ class EventRpcServiceImpl(private val clock: SeasonalClock = SeasonalClock()) : 
         active
     }
 
-    override suspend fun setDisplayName(eventId: ULong, displayName: String): UpdateEventResult =
+    override suspend fun setDisplayName(eventId: ULong, displayName: Component): UpdateEventResult =
         StaffWriteLock.withLock {
             suspendTransaction {
                 val event = EventRepository.findById(eventId) ?: return@suspendTransaction UpdateEventResult.NotFound

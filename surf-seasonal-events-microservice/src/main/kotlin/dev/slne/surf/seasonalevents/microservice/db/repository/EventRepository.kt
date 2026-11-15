@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.single
 import kotlinx.coroutines.flow.singleOrNull
 import kotlinx.coroutines.flow.toList
+import net.kyori.adventure.text.Component
 import java.time.Instant
 
 /** Database access for [SeasonalEventsTable]. Joins an outer transaction if one is open. */
@@ -60,7 +61,7 @@ object EventRepository {
         suspendTransaction {
             SeasonalEventsTable.insertReturning {
                 it[SeasonalEventsTable.name] = name
-                it[SeasonalEventsTable.displayName] = name
+                it[SeasonalEventsTable.displayName] = Component.text(name)
                 it[SeasonalEventsTable.mode] = mode
                 it[SeasonalEventsTable.markerLimit] = markerLimit
                 it[SeasonalEventsTable.dailyLimit] = dailyLimit
@@ -85,7 +86,7 @@ object EventRepository {
     }
 
     /** Sets the display name and returns the event updated, or null if it does not exist. */
-    suspend fun updateDisplayName(id: ULong, displayName: String): SeasonalEvent? = suspendTransaction {
+    suspend fun updateDisplayName(id: ULong, displayName: Component): SeasonalEvent? = suspendTransaction {
         SeasonalEventsTable.update({ SeasonalEventsTable.id eq id }) {
             it[SeasonalEventsTable.displayName] = displayName
         }

@@ -4,6 +4,7 @@ import dev.slne.surf.seasonalevents.api.event.EventMode
 import dev.slne.surf.seasonalevents.api.event.EventState
 import dev.slne.surf.seasonalevents.api.event.SeasonalEvent
 import dev.slne.surf.seasonalevents.api.result.UpdateLootResult
+import net.kyori.adventure.text.Component
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -13,7 +14,7 @@ import kotlin.test.assertNull
 class LootRulesTest {
 
     private val draft = SeasonalEvent(
-        id = 1u, name = "christmas-2026", displayName = "Advent",
+        id = 1u, name = "christmas-2026", displayName = Component.text("Advent"),
         mode = EventMode.DAILY, state = EventState.DRAFT,
         markerLimit = 24, dailyLimit = 0,
         endsAt = null, startedAt = null, createdAt = Instant.parse("2026-11-01T00:00:00Z"),
