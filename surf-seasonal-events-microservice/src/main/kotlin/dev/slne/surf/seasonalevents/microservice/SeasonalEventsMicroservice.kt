@@ -14,6 +14,7 @@ import dev.slne.surf.seasonalevents.microservice.db.table.CollectionsTable
 import dev.slne.surf.seasonalevents.microservice.db.table.DailyAssignmentsTable
 import dev.slne.surf.seasonalevents.microservice.db.table.EventMarkersTable
 import dev.slne.surf.seasonalevents.microservice.db.table.LootPackagesTable
+import dev.slne.surf.seasonalevents.microservice.db.table.NpcVisitsTable
 import dev.slne.surf.seasonalevents.microservice.db.table.SeasonalEventsTable
 import dev.slne.surf.seasonalevents.microservice.logic.SeasonalClock
 import dev.slne.surf.seasonalevents.microservice.rpc.EventRpcServiceImpl
@@ -51,6 +52,7 @@ class SeasonalEventsMicroservice : Microservice() {
             LootPackagesTable,
             DailyAssignmentsTable,
             CollectionsTable,
+            NpcVisitsTable,
         )
     }
 

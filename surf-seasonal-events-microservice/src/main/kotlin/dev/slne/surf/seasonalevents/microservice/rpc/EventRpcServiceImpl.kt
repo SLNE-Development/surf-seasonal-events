@@ -13,6 +13,7 @@ import dev.slne.surf.seasonalevents.core.rpc.EventRpcService
 import dev.slne.surf.seasonalevents.microservice.db.repository.EventRepository
 import dev.slne.surf.seasonalevents.microservice.db.repository.LootRepository
 import dev.slne.surf.seasonalevents.microservice.db.repository.MarkerRepository
+import dev.slne.surf.seasonalevents.microservice.logic.DailySchedule
 import dev.slne.surf.seasonalevents.microservice.logic.EventRules
 import dev.slne.surf.seasonalevents.microservice.logic.PackageRequirement
 import dev.slne.surf.seasonalevents.microservice.logic.SeasonalClock
@@ -42,13 +43,19 @@ class EventRpcServiceImpl(private val clock: SeasonalClock = SeasonalClock()) : 
             val target = EventRepository.findById(eventId)
                 ?: return@suspendTransaction StartEventResult.NotFound
 
-            val markerCount = MarkerRepository.count(eventId)
+            val markers = MarkerRepository.findByEvent(eventId)
             EventRules.checkStart(
                 target = target,
                 active = getActiveEvent(),
-                markerCount = markerCount,
+                markerCount = markers.size,
                 packageCount = LootRepository.countFilled(eventId),
-                requiredPackages = PackageRequirement.required(target.mode, markerCount, clock.today(), endsAt),
+                requiredPackages = PackageRequirement.required(
+                    mode = target.mode,
+                    markerCount = markers.size,
+                    startDay = clock.today(),
+                    endsAt = endsAt,
+                    pinnedDays = DailySchedule.pinnedDays(markers),
+                ),
             )?.let { return@suspendTransaction it }
 
             val started = EventRepository.updateState(eventId, EventState.ACTIVE, startedAt = clock.now(), endsAt = endsAt)
@@ -80,6 +87,18 @@ class EventRpcServiceImpl(private val clock: SeasonalClock = SeasonalClock()) : 
                 EventRules.checkDisplayName(event, displayName)?.let { return@suspendTransaction it }
 
                 val updated = EventRepository.updateDisplayName(eventId, displayName)
+                    ?: return@suspendTransaction UpdateEventResult.NotFound
+                UpdateEventResult.Success(updated)
+            }
+        }
+
+    override suspend fun setNpcVisitRequired(eventId: ULong, required: Boolean): UpdateEventResult =
+        StaffWriteLock.withLock {
+            suspendTransaction {
+                val event = EventRepository.findById(eventId) ?: return@suspendTransaction UpdateEventResult.NotFound
+                if (event.state == EventState.ENDED) return@suspendTransaction UpdateEventResult.AlreadyEnded
+
+                val updated = EventRepository.updateNpcVisitRequired(eventId, required)
                     ?: return@suspendTransaction UpdateEventResult.NotFound
                 UpdateEventResult.Success(updated)
             }

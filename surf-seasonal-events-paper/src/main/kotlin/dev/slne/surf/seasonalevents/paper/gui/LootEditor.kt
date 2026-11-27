@@ -36,10 +36,11 @@ object LootEditor {
     const val CONTENT_SLOTS = 45
     const val BACK_SLOT = 45
     const val FIXED_DAY_SLOT = 49
+    const val NPC_REWARD_SLOT = 51
     const val DELETE_SLOT = 53
 
     /** What happens after the editor was closed and saved. */
-    enum class AfterClose { NOTHING, OVERVIEW, FIXED_DAY_DIALOG, DELETE_DIALOG }
+    enum class AfterClose { NOTHING, OVERVIEW, FIXED_DAY_DIALOG, TOGGLE_NPC_REWARD, DELETE_DIALOG }
 
     class Holder(val event: SeasonalEvent, val lootPackage: LootPackage) : InventoryHolder {
         var afterClose = AfterClose.NOTHING
@@ -59,7 +60,10 @@ object LootEditor {
 
         for (slot in CONTENT_SLOTS until inventory.size) inventory.setItem(slot, filler)
         inventory.setItem(BACK_SLOT, backIcon)
-        if (event.supportsFixedDay) inventory.setItem(FIXED_DAY_SLOT, fixedDayIcon(lootPackage))
+        if (event.supportsFixedDay) {
+            inventory.setItem(FIXED_DAY_SLOT, fixedDayIcon(lootPackage))
+            inventory.setItem(NPC_REWARD_SLOT, npcRewardIcon(lootPackage))
+        }
         inventory.setItem(DELETE_SLOT, deleteIcon)
 
         player.openInventory(inventory)
@@ -125,6 +129,7 @@ object LootEditor {
             AfterClose.NOTHING -> Unit
             AfterClose.OVERVIEW -> openLootOverview(player, holder.event)
             AfterClose.FIXED_DAY_DIALOG -> player.showDialog(fixedDayDialog(holder.event, holder.lootPackage))
+            AfterClose.TOGGLE_NPC_REWARD -> toggleNpcReward(player, holder.event, holder.lootPackage)
             AfterClose.DELETE_DIALOG -> player.showDialog(deletePackageDialog(holder.event, holder.lootPackage))
         }
     }

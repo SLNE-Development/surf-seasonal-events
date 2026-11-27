@@ -44,6 +44,26 @@ class PackageRequirementTest {
     }
 
     @Test
+    fun `daily event with only pinned markers needs one package per pinned day`() {
+        val pinned = (1..23).map { LocalDate.of(2026, 12, it) }.toSet()
+        val newYearsEve = Instant.parse("2026-12-31T22:59:00Z")
+        assertEquals(23, PackageRequirement.required(EventMode.DAILY, markerCount = 23, firstOfDecember, newYearsEve, pinned))
+    }
+
+    @Test
+    fun `pinned days before a late start still need packages, those after the end do not`() {
+        val pinned = setOf(LocalDate.of(2026, 12, 1), LocalDate.of(2026, 12, 2), LocalDate.of(2026, 12, 30))
+        val lateStart = LocalDate.of(2026, 12, 2)
+        assertEquals(2, PackageRequirement.required(EventMode.DAILY, markerCount = 3, lateStart, christmasEveEnd, pinned))
+    }
+
+    @Test
+    fun `a random pool next to pinned markers needs every event day`() {
+        val pinned = setOf(LocalDate.of(2026, 12, 1))
+        assertEquals(24, PackageRequirement.required(EventMode.DAILY, markerCount = 2, firstOfDecember, christmasEveEnd, pinned))
+    }
+
+    @Test
     fun `shortage only when fewer packages than needed`() {
         assertEquals(PackageRequirement.Shortage(filled = 23, needed = 24), PackageRequirement.check(23, 24))
         assertNull(PackageRequirement.check(24, 24))

@@ -23,6 +23,7 @@ object MarkerTool {
         buildLore {
             line { info("Linksklick auf einen Block: markieren") }
             line { info("Rechtsklick auf einen Marker: entmarkieren") }
+            line { info("Shift + Rechtsklick auf einen Marker: Tag festlegen") }
         }
         editPersistentDataContainer { it.set(eventIdKey, PersistentDataType.LONG, event.id.toLong()) }
     }

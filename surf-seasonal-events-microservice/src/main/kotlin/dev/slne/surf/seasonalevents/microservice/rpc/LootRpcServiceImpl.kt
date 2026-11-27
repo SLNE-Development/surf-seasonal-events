@@ -34,7 +34,8 @@ object LootRpcServiceImpl : LootRpcService {
                 val current = LootRepository.findById(packageId) ?: return@suspendTransaction UpdateLootResult.NotFound
                 val event = EventRepository.findById(current.eventId) ?: return@suspendTransaction UpdateLootResult.NotFound
                 LootRules.checkSave(event, current.items, expectedItems)?.let { return@suspendTransaction it }
-                val emptiesPackage = current.items.isNotEmpty() && items.isEmpty()
+                // The NPC reward is not part of the requirement, so emptying it never causes a shortage.
+                val emptiesPackage = current.items.isNotEmpty() && items.isEmpty() && !current.npcReward
                 if (emptiesPackage) {
                     PackageGuard.shortageAfter(event, removedPackages = 1)?.let {
                         return@suspendTransaction UpdateLootResult.NotEnoughPackages(it.filled, it.needed)
@@ -57,6 +58,7 @@ object LootRpcServiceImpl : LootRpcService {
             if (day != null && LootRepository.isFixedDayTaken(event.id, day, exceptId = packageId)) {
                 return@suspendTransaction UpdateLootResult.FixedDayTaken
             }
+            if (day == null && lootPackage.npcReward) return@suspendTransaction UpdateLootResult.NpcRewardNeedsFixedDay
 
             val updated = LootRepository.updateFixedDay(packageId, day)
                 ?: return@suspendTransaction UpdateLootResult.NotFound
@@ -64,12 +66,39 @@ object LootRpcServiceImpl : LootRpcService {
         }
     }
 
+    override suspend fun setNpcReward(packageId: ULong, npcReward: Boolean): UpdateLootResult =
+        StaffWriteLock.withLock {
+            suspendTransaction {
+                val lootPackage = LootRepository.findById(packageId) ?: return@suspendTransaction UpdateLootResult.NotFound
+                val event = EventRepository.findById(lootPackage.eventId) ?: return@suspendTransaction UpdateLootResult.NotFound
+                LootRules.checkChange(event)?.let { return@suspendTransaction it }
+                if (event.mode != EventMode.DAILY) return@suspendTransaction UpdateLootResult.NotDailyEvent
+
+                if (npcReward) {
+                    if (lootPackage.fixedDay == null) return@suspendTransaction UpdateLootResult.NpcRewardNeedsFixedDay
+                    if (LootRepository.isNpcRewardTaken(event.id, exceptId = packageId)) {
+                        return@suspendTransaction UpdateLootResult.NpcRewardTaken
+                    }
+                    // A filled package that becomes the reward no longer counts for the map's blocks.
+                    if (!lootPackage.npcReward && lootPackage.items.isNotEmpty()) {
+                        PackageGuard.shortageAfter(event, removedPackages = 1)?.let {
+                            return@suspendTransaction UpdateLootResult.NotEnoughPackages(it.filled, it.needed)
+                        }
+                    }
+                }
+
+                val updated = LootRepository.updateNpcReward(packageId, npcReward)
+                    ?: return@suspendTransaction UpdateLootResult.NotFound
+                UpdateLootResult.Success(updated)
+            }
+        }
+
     override suspend fun delete(packageId: ULong): DeleteLootResult = StaffWriteLock.withLock {
         suspendTransaction {
             val lootPackage = LootRepository.findById(packageId) ?: return@suspendTransaction DeleteLootResult.NotFound
             val event = EventRepository.findById(lootPackage.eventId) ?: return@suspendTransaction DeleteLootResult.NotFound
             if (LootRules.checkChange(event) != null) return@suspendTransaction DeleteLootResult.EventEnded
-            if (lootPackage.items.isNotEmpty()) {
+            if (lootPackage.items.isNotEmpty() && !lootPackage.npcReward) {
                 PackageGuard.shortageAfter(event, removedPackages = 1)?.let {
                     return@suspendTransaction DeleteLootResult.NotEnoughPackages(it.filled, it.needed)
                 }

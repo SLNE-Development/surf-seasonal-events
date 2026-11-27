@@ -70,6 +70,13 @@ interface EventRpcService {
     suspend fun setEnd(eventId: ULong, endsAt: Instant?): UpdateEventResult
 
     /**
+     * Sets whether players have to talk to the event's NPC once before they see any block.
+     *
+     * @return [UpdateEventResult.AlreadyEnded] if the event is `ENDED`
+     */
+    suspend fun setNpcVisitRequired(eventId: ULong, required: Boolean): UpdateEventResult
+
+    /**
      * Ends the active event for good. Its markers stay in the database until they are restored.
      *
      * @return [StopEventResult.NoActiveEvent] if no event is running

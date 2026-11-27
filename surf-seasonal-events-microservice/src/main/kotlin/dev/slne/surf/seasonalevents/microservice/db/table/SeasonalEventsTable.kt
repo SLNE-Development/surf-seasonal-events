@@ -21,4 +21,7 @@ object SeasonalEventsTable : AuditableLongIdTable("seasonal_events") {
     val dailyLimit = integer("daily_limit").default(0)
     val endsAt = timestamp("ends_at").nullable()
     val startedAt = timestamp("started_at").nullable()
+
+    /** Whether players see blocks only after talking to the event's NPC once. */
+    val npcVisitRequired = bool("npc_visit_required").default(false)
 }

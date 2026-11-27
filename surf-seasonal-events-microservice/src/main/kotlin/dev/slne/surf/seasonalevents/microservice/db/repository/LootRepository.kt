@@ -35,6 +35,7 @@ object LootRepository {
         name = this[LootPackagesTable.name],
         items = this[LootPackagesTable.items].bytes,
         fixedDay = this[LootPackagesTable.fixedDay],
+        npcReward = this[LootPackagesTable.npcReward],
     )
 
     /** Inserts an empty package without a fixed day. */
@@ -63,16 +64,47 @@ object LootRepository {
 
     /** The packages of the event that have items, without loading the items. */
     suspend fun findFilledRefs(eventId: ULong): List<PackageRef> = suspendTransaction {
-        LootPackagesTable.select(LootPackagesTable.id, LootPackagesTable.fixedDay)
+        LootPackagesTable.select(LootPackagesTable.id, LootPackagesTable.fixedDay, LootPackagesTable.npcReward)
             .where { (LootPackagesTable.eventId eq eventId) and (itemsLength greater 0) }
-            .map { PackageRef(it[LootPackagesTable.id].value, it[LootPackagesTable.fixedDay]) }
+            .map {
+                PackageRef(
+                    id = it[LootPackagesTable.id].value,
+                    fixedDay = it[LootPackagesTable.fixedDay],
+                    npcReward = it[LootPackagesTable.npcReward],
+                )
+            }
             .toList()
     }
 
-    /** Number of packages of the event that have items; empty packages are never handed out. */
+    /** Returns whether a package of [eventId] other than [exceptId] already is the NPC reward. */
+    suspend fun isNpcRewardTaken(eventId: ULong, exceptId: ULong): Boolean = suspendTransaction {
+        LootPackagesTable.selectAll()
+            .where {
+                (LootPackagesTable.eventId eq eventId) and
+                    (LootPackagesTable.npcReward eq true) and
+                    (LootPackagesTable.id neq exceptId)
+            }
+            .count() > 0
+    }
+
+    suspend fun updateNpcReward(id: ULong, npcReward: Boolean): LootPackage? = suspendTransaction {
+        LootPackagesTable.update({ LootPackagesTable.id eq id }) {
+            it[LootPackagesTable.npcReward] = npcReward
+        }
+        findById(id)
+    }
+
+    /**
+     * Number of packages of the event that have items and can be found on the map; empty packages are
+     * never handed out, and the NPC reward is handed out by the NPC only.
+     */
     suspend fun countFilled(eventId: ULong): Int = suspendTransaction {
         LootPackagesTable.selectAll()
-            .where { (LootPackagesTable.eventId eq eventId) and (itemsLength greater 0) }
+            .where {
+                (LootPackagesTable.eventId eq eventId) and
+                    (itemsLength greater 0) and
+                    (LootPackagesTable.npcReward eq false)
+            }
             .count()
             .toInt()
     }

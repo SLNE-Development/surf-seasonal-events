@@ -24,6 +24,11 @@ data class SeasonalEvent(
     /** When the event was started; null while it is still a draft. */
     val startedAt: @Contextual Instant?,
     val createdAt: @Contextual Instant,
+    /**
+     * Whether a player has to talk to the event's NPC once before they see any block. Set while an NPC is
+     * linked to the event.
+     */
+    val npcVisitRequired: Boolean = false,
 ) {
     companion object {
         /** Longest allowed [name]; matches the database column. */

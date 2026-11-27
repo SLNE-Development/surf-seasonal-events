@@ -16,6 +16,7 @@ import dev.slne.surf.api.core.extensions.sendPacket
 import dev.slne.surf.seasonalevents.api.marker.EventMarker
 import dev.slne.surf.seasonalevents.api.marker.MarkerPosition
 import dev.slne.surf.seasonalevents.paper.collect.CollectService
+import dev.slne.surf.seasonalevents.paper.gui.markerDayDialog
 import dev.slne.surf.seasonalevents.paper.plugin
 import dev.slne.surf.seasonalevents.paper.render.ViewService
 import dev.slne.surf.seasonalevents.paper.tool.MarkerActions
@@ -73,7 +74,7 @@ object FakeBlockClickListener : PacketListener {
     private suspend fun onClick(player: Player, marker: EventMarker, rightClick: Boolean) {
         if (MarkerTool.eventIdOf(player.inventory.itemInMainHand) != null) {
             if (rightClick && player.hasPermission(SeasonalEventsPermissions.COMMAND_EDIT)) {
-                MarkerActions.unmark(player, marker.position)
+                if (player.isSneaking) player.showDialog(markerDayDialog(marker)) else MarkerActions.unmark(player, marker.position)
             }
             return
         }

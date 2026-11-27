@@ -32,7 +32,16 @@ object EventRepository {
         endsAt = this[SeasonalEventsTable.endsAt],
         startedAt = this[SeasonalEventsTable.startedAt],
         createdAt = this[SeasonalEventsTable.createdAt].toInstant(),
+        npcVisitRequired = this[SeasonalEventsTable.npcVisitRequired],
     )
+
+    /** Sets whether blocks need an NPC visit first and returns the event updated, or null if it does not exist. */
+    suspend fun updateNpcVisitRequired(id: ULong, required: Boolean): SeasonalEvent? = suspendTransaction {
+        SeasonalEventsTable.update({ SeasonalEventsTable.id eq id }) {
+            it[SeasonalEventsTable.npcVisitRequired] = required
+        }
+        findById(id)
+    }
 
     suspend fun findById(id: ULong): SeasonalEvent? = suspendTransaction {
         SeasonalEventsTable.selectAll()

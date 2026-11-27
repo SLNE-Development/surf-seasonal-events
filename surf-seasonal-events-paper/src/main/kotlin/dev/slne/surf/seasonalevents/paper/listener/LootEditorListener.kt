@@ -38,6 +38,7 @@ object LootEditorListener : Listener {
         holder.afterClose = when (event.rawSlot) {
             LootEditor.BACK_SLOT -> AfterClose.OVERVIEW
             LootEditor.FIXED_DAY_SLOT -> if (holder.event.supportsFixedDay) AfterClose.FIXED_DAY_DIALOG else return
+            LootEditor.NPC_REWARD_SLOT -> if (holder.event.supportsFixedDay) AfterClose.TOGGLE_NPC_REWARD else return
             LootEditor.DELETE_SLOT -> AfterClose.DELETE_DIALOG
             else -> return
         }

@@ -12,11 +12,11 @@ import dev.slne.surf.seasonalevents.api.SeasonalTime
 import dev.slne.surf.seasonalevents.api.event.EventMode
 import dev.slne.surf.seasonalevents.api.event.SeasonalEvent
 import dev.slne.surf.seasonalevents.api.loot.LootPackage
+import dev.slne.surf.seasonalevents.api.marker.EventMarker
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Material
 import org.bukkit.inventory.ItemStack
 import java.time.Instant
-import java.time.temporal.ChronoUnit
 
 // Buttons and items of the loot GUIs, in the surf menu style. The icons need the surf resource pack.
 
@@ -70,18 +70,37 @@ fun packageIcon(lootPackage: LootPackage): ItemStack = buildItem(Material.CHEST)
     }
 }
 
-/** "zufällig" for the random pool, otherwise the fixed day. */
-private fun LootPackage.distribution() = fixedDay?.let { "fest am ${LootItems.formatDay(it)}" } ?: "zufällig"
+/** "zufällig" for the random pool, otherwise the fixed day, or that the NPC hands it out. */
+private fun LootPackage.distribution(): String {
+    val day = fixedDay?.let(LootItems::formatDay) ?: return "zufällig"
+    return if (npcReward) "vom NPC ab $day" else "fest am $day"
+}
+
+/** Toggles whether the event's NPC hands the package out instead of a block on the map. */
+fun npcRewardIcon(lootPackage: LootPackage): ItemStack =
+    viewIcon(ViewIconType.USERS, if (lootPackage.npcReward) ViewIconColor.GREEN else ViewIconColor.WHITE) {
+        displayName { primary("NPC-Belohnung", TextDecoration.BOLD) }
+        buildLore {
+            emptyLine()
+            line { variableKey("Aktuell: "); variableValue(if (lootPackage.npcReward) "an" else "aus") }
+            line { spacer("Der NPC übergibt dieses Paket ab seinem festen Tag,".toSmallCaps()) }
+            line { spacer("sobald alle Blöcke der Tage davor gefunden sind".toSmallCaps()) }
+            line { spacer("Braucht einen festen Tag, nur ein Paket pro Event".toSmallCaps()) }
+            emptyLine()
+            line { spacer("Klicken zum Umschalten".toSmallCaps()) }
+        }
+    }
 
 /**
  * Explains how packages are handed out in the event's mode and whether there are enough of them:
  * one package per day in `DAILY`, one per found block in `COLLECT`, each at most once per player.
  */
-fun lootInfoIcon(event: SeasonalEvent, packages: List<LootPackage>, markerCount: Int): ItemStack {
-    val filled = packages.count { it.items.isNotEmpty() }
+fun lootInfoIcon(event: SeasonalEvent, packages: List<LootPackage>, markers: List<EventMarker>): ItemStack {
+    // The NPC reward is handed out by the NPC, not for a block.
+    val filled = packages.count { it.items.isNotEmpty() && !it.npcReward }
     val needed = when (event.mode) {
-        EventMode.DAILY -> eventDays(event)
-        EventMode.COLLECT -> markerCount
+        EventMode.DAILY -> dailyDays(event, markers)
+        EventMode.COLLECT -> markers.size
     }
     /** Packages still to fill; null if there are enough. */
     val missing = needed?.minus(filled)?.takeIf { it > 0 }
@@ -96,6 +115,9 @@ fun lootInfoIcon(event: SeasonalEvent, packages: List<LootPackage>, markerCount:
                     line { info("und bekommt dafür ein Paket.") }
                     line { info("Ein Paket mit festem Tag hat an dem Tag Vorrang,") }
                     line { info("sonst kommt ein zufälliges ohne festen Tag.") }
+                    line { info("Ist ein Block auf einen Tag festgelegt, gilt er") }
+                    line { info("für alle und kann später nachgeholt werden.") }
+                    line { info("Die NPC-Belohnung gibt nur der NPC aus.") }
                 }
 
                 EventMode.COLLECT -> {
@@ -111,7 +133,7 @@ fun lootInfoIcon(event: SeasonalEvent, packages: List<LootPackage>, markerCount:
                 variableValue(
                     when {
                         needed == null -> "1 pro Event-Tag (kein Enddatum gesetzt)"
-                        event.mode == EventMode.DAILY -> "mindestens $needed (1 pro Tag)"
+                        event.mode == EventMode.DAILY -> "mindestens $needed (1 pro Tag mit Block)"
                         else -> "mindestens $needed (1 pro Block)"
                     },
                 )
@@ -133,9 +155,20 @@ fun lootInfoIcon(event: SeasonalEvent, packages: List<LootPackage>, markerCount:
     }
 }
 
-/** Days from the start (or today) until the end, both inclusive; null without an end date. */
-private fun eventDays(event: SeasonalEvent): Int? {
+/**
+ * Days that hand out a block, the same rule as the microservice's `PackageRequirement`: every day from the
+ * start (or today) until the end while the random pool has markers, otherwise only the pinned days up to the
+ * end. Null without an end date.
+ */
+private fun dailyDays(event: SeasonalEvent, markers: List<EventMarker>): Int? {
     val end = event.endsAt?.atZone(SeasonalTime.ZONE)?.toLocalDate() ?: return null
     val start = (event.startedAt ?: Instant.now()).atZone(SeasonalTime.ZONE).toLocalDate()
-    return (ChronoUnit.DAYS.between(start, end) + 1).toInt().coerceAtLeast(0)
+    val pinned = markers.mapNotNullTo(HashSet()) { it.day }
+    val hasRandomPool = pinned.isEmpty() || markers.size > pinned.size
+    val eventDays = if (hasRandomPool) {
+        generateSequence(start) { it.plusDays(1) }.takeWhile { !it.isAfter(end) }.toSet()
+    } else {
+        emptySet()
+    }
+    return (eventDays + pinned.filter { !it.isAfter(end) }).size
 }

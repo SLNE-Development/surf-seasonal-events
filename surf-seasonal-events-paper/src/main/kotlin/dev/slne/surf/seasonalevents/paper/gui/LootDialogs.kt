@@ -127,6 +127,19 @@ private suspend fun setFixedDay(player: Player, event: SeasonalEvent, lootPackag
     reopenEditor(player, event, lootPackage.id)
 }
 
+/**
+ * Makes [lootPackage] the reward of the event's NPC or turns that off again, then reopens the editor.
+ * The NPC hands the reward out from the package's fixed day on, so that day has to be set first.
+ */
+fun toggleNpcReward(player: Player, event: SeasonalEvent, lootPackage: LootPackage) {
+    plugin.launch {
+        val outcome = rpcCall { lootRpc.setNpcReward(lootPackage.id, !lootPackage.npcReward) }
+        if (outcome !is RpcOutcome.Ok) return@launch player.sendMessage(unavailableMessage())
+        player.sendMessage(outcome.value.message())
+        reopenEditor(player, event, lootPackage.id)
+    }
+}
+
 /** Loads the package again, so the editor shows the saved state, and opens it. */
 private fun reopenEditor(player: Player, event: SeasonalEvent, packageId: ULong) {
     plugin.launch {

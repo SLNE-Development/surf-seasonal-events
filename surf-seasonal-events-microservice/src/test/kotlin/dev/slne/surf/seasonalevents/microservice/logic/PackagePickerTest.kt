@@ -89,4 +89,19 @@ class PackagePickerTest {
             PackagePicker.candidates(EventMode.COLLECT, all, setOf(randomA.id), today),
         )
     }
+
+    @Test
+    fun `the npc reward is never found on the map, not even on its own day`() {
+        val reward = PackageRef(9u, LocalDate.of(2026, 12, 24), npcReward = true)
+        val packages = listOf(reward, randomA)
+        assertEquals(listOf(randomA), PackagePicker.candidates(EventMode.DAILY, packages, emptySet(), reward.fixedDay!!))
+        assertEquals(listOf(randomA), PackagePicker.candidates(EventMode.COLLECT, packages, emptySet(), today))
+    }
+
+    @Test
+    fun `a caught-up day gets the package fixed to that day`() {
+        // Called with the pinned day of the marker instead of today.
+        val earlier = pkg(5, today.minusDays(2))
+        assertEquals(listOf(earlier), PackagePicker.candidates(EventMode.DAILY, all + earlier, emptySet(), earlier.fixedDay!!))
+    }
 }

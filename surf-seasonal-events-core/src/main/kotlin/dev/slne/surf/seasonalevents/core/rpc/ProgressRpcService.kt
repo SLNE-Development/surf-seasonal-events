@@ -2,10 +2,12 @@ package dev.slne.surf.seasonalevents.core.rpc
 
 import dev.slne.surf.rabbitmq.api.rpc.RpcService
 import dev.slne.surf.seasonalevents.api.marker.EventMarker
+import dev.slne.surf.seasonalevents.api.progress.NpcStatus
 import dev.slne.surf.seasonalevents.api.progress.PlayerStatus
 import dev.slne.surf.seasonalevents.api.progress.PlayerView
 import dev.slne.surf.seasonalevents.api.result.CollectResult
 import dev.slne.surf.seasonalevents.api.result.PreviewResult
+import dev.slne.surf.seasonalevents.api.result.RewardResult
 import java.util.UUID
 
 /** Tracks what each player sees and collects in the active event. */
@@ -39,4 +41,24 @@ interface ProgressRpcService {
 
     /** Returns the progress of [player] in the active event, as shown by `/seasonalevents`. */
     suspend fun getStatus(player: UUID): PlayerStatus
+
+    /**
+     * Records that [player] talked to the NPC of event [eventName] and returns what the NPC knows about them.
+     * [NpcStatus.Active.firstVisit] is true only for the first talk per event.
+     *
+     * @return [NpcStatus.NoActiveEvent], recording nothing, if [eventName] is not the active event
+     */
+    suspend fun visitNpc(player: UUID, eventName: String): NpcStatus
+
+    /**
+     * Checks whether [player] may receive the NPC reward and returns its items, without booking anything.
+     * The plugin uses the items to check for inventory space before calling [claimReward].
+     */
+    suspend fun previewReward(player: UUID): RewardResult
+
+    /**
+     * Books the NPC reward [packageId] in one transaction, repeating every check of [previewReward].
+     * The plugin hands out the items only on [RewardResult.Granted].
+     */
+    suspend fun claimReward(player: UUID, packageId: ULong): RewardResult
 }

@@ -11,6 +11,8 @@ import dev.slne.surf.seasonalevents.paper.listener.LootEditorListener
 import dev.slne.surf.seasonalevents.paper.listener.MarkerProtectionListener
 import dev.slne.surf.seasonalevents.paper.listener.MarkerToolListener
 import dev.slne.surf.seasonalevents.paper.listener.PlayerConnectionListener
+import dev.slne.surf.seasonalevents.paper.npc.EventNpcs
+import dev.slne.surf.seasonalevents.paper.npc.NpcInteractListener
 
 /** Registers every Bukkit and PacketEvents listener of the plugin. */
 object PaperListenerManager {
@@ -23,6 +25,7 @@ object PaperListenerManager {
         MarkerProtectionListener.register()
         MarkerToolListener.register()
         LootEditorListener.register()
+        if (EventNpcs.enabled) NpcInteractListener.register()
 
         val events = packetEvents.eventManager
         packetListeners += events.registerListener(FakeBlockPacketListener, PacketListenerPriority.HIGH)

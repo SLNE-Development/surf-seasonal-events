@@ -27,6 +27,8 @@ import dev.slne.surf.seasonalevents.core.client.rpc.progressRpc
 import dev.slne.surf.seasonalevents.core.client.rpc.rpcCall
 import dev.slne.surf.seasonalevents.paper.command.argument.SeasonalEventArgument
 import dev.slne.surf.seasonalevents.paper.gui.openLootOverview
+import dev.slne.surf.seasonalevents.paper.npc.EventNpcs
+import dev.slne.surf.seasonalevents.paper.npc.npcSubcommand
 import dev.slne.surf.seasonalevents.paper.plugin
 import dev.slne.surf.seasonalevents.paper.render.ViewService
 import dev.slne.surf.seasonalevents.paper.time.DateArgumentParser
@@ -166,6 +168,9 @@ fun seasonalEventsCommand() = commandTree("seasonalevents") {
             }
         }
     }
+
+    // npc <event> <npc> [remove]: only with surf-npc, whose classes are missing otherwise
+    if (EventNpcs.enabled) npcSubcommand()
 }
 
 /** Runs an RPC call and sends its message, or the "unavailable" message if the microservice is down. */

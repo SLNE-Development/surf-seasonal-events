@@ -3,6 +3,8 @@ package dev.slne.surf.seasonalevents.microservice.db.repository
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.core.ResultRow
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.core.and
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.core.eq
+import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.core.neq
+import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.update
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.deleteWhere
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.insertReturning
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.select
@@ -15,6 +17,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.single
 import kotlinx.coroutines.flow.singleOrNull
 import kotlinx.coroutines.flow.toList
+import java.time.LocalDate
 import java.util.UUID
 
 /** Database access for [EventMarkersTable]. Joins an outer transaction if one is open. */
@@ -31,6 +34,7 @@ object MarkerRepository {
         ),
         blockData = this[EventMarkersTable.blockData],
         skullTexture = this[EventMarkersTable.skullTexture],
+        day = this[EventMarkersTable.day],
     )
 
     suspend fun insert(
@@ -95,6 +99,24 @@ object MarkerRepository {
 
     suspend fun count(eventId: ULong): Int = suspendTransaction {
         EventMarkersTable.selectAll().where { EventMarkersTable.eventId eq eventId }.count().toInt()
+    }
+
+    /** Returns whether a marker of [eventId] other than [exceptId] is already pinned to [day]. */
+    suspend fun isDayTaken(eventId: ULong, day: LocalDate, exceptId: ULong): Boolean = suspendTransaction {
+        EventMarkersTable.selectAll()
+            .where {
+                (EventMarkersTable.eventId eq eventId) and
+                    (EventMarkersTable.day eq day) and
+                    (EventMarkersTable.id neq exceptId)
+            }
+            .count() > 0
+    }
+
+    suspend fun updateDay(id: ULong, day: LocalDate?): EventMarker? = suspendTransaction {
+        EventMarkersTable.update({ EventMarkersTable.id eq id }) {
+            it[EventMarkersTable.day] = day
+        }
+        findById(id)
     }
 
     /** Deletes a marker; its assignments go with it, collections keep a null reference. */
