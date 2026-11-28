@@ -16,16 +16,36 @@ fun PlayerStatus.message(): Component = when (this) {
         info("Gerade läuft kein Event.")
     }
 
-    is PlayerStatus.Daily -> statusMessage(event, listOf(progressRow(found, total), todayRow(today)))
+    is PlayerStatus.Daily -> statusMessage(
+        event,
+        if (npcVisitNeeded) {
+            listOf(npcVisitRow())
+        } else {
+            listOfNotNull(
+                progressRow(found, total),
+                todayRow(today),
+                openEarlier.takeIf { it > 0 }?.let { open ->
+                    panelRow("Nachholen") { warning(if (open == 1) "1 Block von früheren Tagen" else "$open Blöcke von früheren Tagen") }
+                },
+            )
+        },
+    )
 
     is PlayerStatus.Collect -> statusMessage(
         event,
-        listOfNotNull(
-            progressRow(found, total),
-            remainingToday?.let { remaining -> panelRow("Heute noch") { variableValue(remaining) } },
-        ),
+        if (npcVisitNeeded) {
+            listOf(npcVisitRow())
+        } else {
+            listOfNotNull(
+                progressRow(found, total),
+                remainingToday?.let { remaining -> panelRow("Heute noch") { variableValue(remaining) } },
+            )
+        },
     )
 }
+
+/** Blocks stay hidden until the player talked to the event's NPC. */
+private fun npcVisitRow(): Component = panelRow("Start") { warning("Sprich zuerst mit dem Event-NPC, dann geht die Suche los!") }
 
 private fun todayRow(today: DailyToday): Component = panelRow("Heute") {
     when (today) {

@@ -3,6 +3,7 @@ package dev.slne.surf.seasonalevents.microservice.logic
 import dev.slne.surf.seasonalevents.api.event.EventMode
 import dev.slne.surf.seasonalevents.api.event.EventState
 import dev.slne.surf.seasonalevents.api.event.SeasonalEvent
+import dev.slne.surf.seasonalevents.api.loot.PackageCoverage
 import dev.slne.surf.seasonalevents.api.result.CreateEventResult
 import dev.slne.surf.seasonalevents.api.result.DeleteEventResult
 import dev.slne.surf.seasonalevents.api.result.StartEventResult
@@ -32,54 +33,54 @@ class EventRulesTest {
 
     @Test
     fun `draft with markers and packages may start`() {
-        assertNull(EventRules.checkStart(draft, active = null, markerCount = 24, packageCount = 24, requiredPackages = null))
+        assertNull(EventRules.checkStart(draft, active = null, markerCount = 24, packageCount = 24, coverage = null))
     }
 
     @Test
     fun `start is refused while another event is active`() {
         val other = draft.copy(id = 2u, name = "halloween-2026", state = EventState.ACTIVE)
-        val result = EventRules.checkStart(draft, active = other, markerCount = 24, packageCount = 24, requiredPackages = null)
+        val result = EventRules.checkStart(draft, active = other, markerCount = 24, packageCount = 24, coverage = null)
         assertEquals(StartEventResult.AnotherEventActive("halloween-2026"), result)
     }
 
     @Test
     fun `start is refused if the event already ended`() {
         val ended = draft.copy(state = EventState.ENDED)
-        val result = EventRules.checkStart(ended, active = null, markerCount = 24, packageCount = 24, requiredPackages = null)
+        val result = EventRules.checkStart(ended, active = null, markerCount = 24, packageCount = 24, coverage = null)
         assertEquals(StartEventResult.AlreadyEnded, result)
     }
 
     @Test
     fun `start is refused if there are no markers`() {
-        val result = EventRules.checkStart(draft, active = null, markerCount = 0, packageCount = 24, requiredPackages = null)
+        val result = EventRules.checkStart(draft, active = null, markerCount = 0, packageCount = 24, coverage = null)
         assertEquals(StartEventResult.NoMarkers, result)
     }
 
     @Test
     fun `start is refused if there are no packages`() {
-        val result = EventRules.checkStart(draft, active = null, markerCount = 24, packageCount = 0, requiredPackages = null)
+        val result = EventRules.checkStart(draft, active = null, markerCount = 24, packageCount = 0, coverage = null)
         assertEquals(StartEventResult.NoPackages, result)
     }
 
     @Test
     fun `collect event needs one package per marker`() {
-        val result = EventRules.checkStart(collectDraft, active = null, markerCount = 40, packageCount = 39, requiredPackages = 40)
+        val result = EventRules.checkStart(collectDraft, active = null, markerCount = 40, packageCount = 39, coverage = PackageCoverage.Result(covered = 39, needed = 40))
         assertEquals(StartEventResult.NotEnoughPackages(filled = 39, needed = 40), result)
     }
 
     @Test
     fun `collect event with as many packages as markers may start`() {
-        assertNull(EventRules.checkStart(collectDraft, active = null, markerCount = 40, packageCount = 40, requiredPackages = 40))
+        assertNull(EventRules.checkStart(collectDraft, active = null, markerCount = 40, packageCount = 40, coverage = PackageCoverage.Result(covered = 40, needed = 40)))
     }
 
     @Test
     fun `daily event without end may start with fewer packages than markers`() {
-        assertNull(EventRules.checkStart(draft, active = null, markerCount = 40, packageCount = 1, requiredPackages = null))
+        assertNull(EventRules.checkStart(draft, active = null, markerCount = 40, packageCount = 1, coverage = null))
     }
 
     @Test
-    fun `daily event with end needs one package per day`() {
-        val result = EventRules.checkStart(draft, active = null, markerCount = 5, packageCount = 23, requiredPackages = 24)
+    fun `daily event refuses to start while packages do not cover every day`() {
+        val result = EventRules.checkStart(draft, active = null, markerCount = 5, packageCount = 23, coverage = PackageCoverage.Result(covered = 23, needed = 24))
         assertEquals(StartEventResult.NotEnoughPackages(filled = 23, needed = 24), result)
     }
 

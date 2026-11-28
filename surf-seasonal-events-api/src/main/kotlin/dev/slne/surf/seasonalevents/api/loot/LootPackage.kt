@@ -17,6 +17,11 @@ class LootPackage(
     val items: ByteArray,
     /** In [dev.slne.surf.seasonalevents.api.event.EventMode.DAILY], the day this package is given on; null for random packages. */
     val fixedDay: @Contextual LocalDate?,
+    /**
+     * Whether the package is the reward of the event's NPC instead of being found on the map. The NPC hands
+     * it out from [fixedDay] on to players who found every pinned marker of the days before.
+     */
+    val npcReward: Boolean = false,
 ) {
     override fun equals(other: Any?) = other is LootPackage && other.id == id
     override fun hashCode() = id.hashCode()

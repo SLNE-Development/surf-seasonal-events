@@ -2,35 +2,44 @@ package dev.slne.surf.seasonalevents.microservice.logic
 
 import dev.slne.surf.seasonalevents.api.SeasonalTime
 import dev.slne.surf.seasonalevents.api.event.EventMode
+import dev.slne.surf.seasonalevents.api.loot.PackageCoverage
 import java.time.Instant
 import java.time.LocalDate
-import java.time.temporal.ChronoUnit
 
 /**
- * How many filled packages an event needs so nobody goes away empty, because a player receives each
- * package at most once: one per marker in `COLLECT` (every found block gives a package), one per event
- * day in `DAILY` (every day gives a package). Checked when an event starts and kept while it runs.
+ * Applies [PackageCoverage] to the stored state of an event, so nobody goes away empty: a player receives
+ * each package at most once, so every block the event hands out needs a package that can be given for it.
+ * Checked when an event starts and kept while it runs. The NPC reward is not part of it.
  */
 object PackageRequirement {
 
-    /** A rule violation: the event would have [filled] packages but needs [needed]. */
-    data class Shortage(val filled: Int, val needed: Int)
-
     /**
-     * Packages needed, or null if there is no requirement beyond one package: a `DAILY` event
-     * without an end date has no known number of days.
+     * Coverage of the event, or null if it cannot be known: a `DAILY` event with a random pool and no end date
+     * then only needs one filled package.
      *
      * @param startDay first event day: the start day of a running event, today for an event about to start
+     * @param pinnedDays days that markers are pinned to
+     * @param packages the filled packages of the event
      */
-    fun required(mode: EventMode, markerCount: Int, startDay: LocalDate, endsAt: Instant?): Int? = when (mode) {
-        EventMode.COLLECT -> markerCount
-        EventMode.DAILY -> endsAt?.let { end ->
-            val endDay = LocalDate.ofInstant(end, SeasonalTime.ZONE)
-            (ChronoUnit.DAYS.between(startDay, endDay) + 1).toInt().coerceAtLeast(0)
+    fun coverage(
+        mode: EventMode,
+        markerCount: Int,
+        startDay: LocalDate,
+        endsAt: Instant?,
+        pinnedDays: Set<LocalDate>,
+        packages: List<PackageRef>,
+    ): PackageCoverage.Result? {
+        val forBlocks = packages.filterNot { it.npcReward }
+        return when (mode) {
+            EventMode.COLLECT -> PackageCoverage.collect(markerCount, forBlocks.size)
+            EventMode.DAILY -> PackageCoverage.daily(
+                startDay = startDay,
+                endDay = endsAt?.let { LocalDate.ofInstant(it, SeasonalTime.ZONE) },
+                markerCount = markerCount,
+                pinnedDays = pinnedDays,
+                fixedDays = forBlocks.mapNotNull { it.fixedDay },
+                randomPackages = forBlocks.count { it.fixedDay == null },
+            )
         }
     }
-
-    /** Returns the shortage if [filled] packages do not meet [needed], null if they do. */
-    fun check(filled: Int, needed: Int?): Shortage? =
-        if (needed != null && filled < needed) Shortage(filled, needed) else null
 }

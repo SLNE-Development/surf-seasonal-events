@@ -49,6 +49,16 @@ interface LootRpcService {
     suspend fun setFixedDay(packageId: ULong, day: LocalDate?): UpdateLootResult
 
     /**
+     * Marks a package as the reward of the event's NPC, or unmarks it. The reward is never found on the
+     * map; the NPC hands it out from the package's fixed day on.
+     *
+     * @return [UpdateLootResult.NpcRewardNeedsFixedDay] if the package has no fixed day,
+     * [UpdateLootResult.NpcRewardTaken] if another package already is the reward,
+     * [UpdateLootResult.NotDailyEvent] for a `COLLECT` event, [UpdateLootResult.EventEnded] if it has ended
+     */
+    suspend fun setNpcReward(packageId: ULong, npcReward: Boolean): UpdateLootResult
+
+    /**
      * Deletes a package. Collections that handed it out are kept without a package reference.
      *
      * @return [DeleteLootResult.NotFound] if the package does not exist,

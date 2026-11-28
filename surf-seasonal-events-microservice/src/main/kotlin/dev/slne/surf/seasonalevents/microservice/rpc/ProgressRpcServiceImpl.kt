@@ -4,17 +4,24 @@ import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.transactions.s
 import dev.slne.surf.seasonalevents.api.event.EventMode
 import dev.slne.surf.seasonalevents.api.event.SeasonalEvent
 import dev.slne.surf.seasonalevents.api.marker.EventMarker
+import dev.slne.surf.seasonalevents.api.progress.NpcReward
+import dev.slne.surf.seasonalevents.api.progress.NpcStatus
 import dev.slne.surf.seasonalevents.api.progress.PlayerStatus
 import dev.slne.surf.seasonalevents.api.progress.PlayerView
 import dev.slne.surf.seasonalevents.api.result.CollectResult
 import dev.slne.surf.seasonalevents.api.result.PreviewResult
+import dev.slne.surf.seasonalevents.api.result.RewardResult
 import dev.slne.surf.seasonalevents.core.rpc.EventRpcService
 import dev.slne.surf.seasonalevents.core.rpc.ProgressRpcService
 import dev.slne.surf.seasonalevents.microservice.db.repository.AssignmentRepository
 import dev.slne.surf.seasonalevents.microservice.db.repository.CollectionRepository
 import dev.slne.surf.seasonalevents.microservice.db.repository.LootRepository
 import dev.slne.surf.seasonalevents.microservice.db.repository.MarkerRepository
+import dev.slne.surf.seasonalevents.microservice.db.repository.NpcVisitRepository
 import dev.slne.surf.seasonalevents.microservice.logic.CollectRules
+import dev.slne.surf.seasonalevents.microservice.logic.DailySchedule
+import dev.slne.surf.seasonalevents.microservice.logic.DedupKeys
+import dev.slne.surf.seasonalevents.microservice.logic.NpcRules
 import dev.slne.surf.seasonalevents.microservice.logic.PackagePicker
 import dev.slne.surf.seasonalevents.microservice.logic.PackageRef
 import dev.slne.surf.seasonalevents.microservice.logic.SeasonalClock
@@ -26,8 +33,8 @@ import java.util.UUID
 import kotlin.random.Random
 
 /**
- * Microservice side of [ProgressRpcService]: daily assignments, previews and booking collections.
- * Package items are only loaded for the package that is previewed or handed out.
+ * Microservice side of [ProgressRpcService]: daily assignments, pinned days, previews, booking collections
+ * and the event's NPC. Package items are only loaded for the package that is previewed or handed out.
  *
  * @param events used to read the active event, which also ends it once its end date has passed
  * @param clock source of "today"; replaceable to test day changes
@@ -39,8 +46,8 @@ class ProgressRpcServiceImpl(
 ) : ProgressRpcService {
 
     /**
-     * Serializes [collect] per player, so parallel clicks cannot both pass the checks and receive
-     * the same package twice. Valid because only one microservice instance runs.
+     * Serializes [collect] and [claimReward] per player, so parallel clicks cannot both pass the checks and
+     * receive the same package twice. Valid because only one microservice instance runs.
      */
     private val collectLocks = Array(64) { Mutex() }
 
@@ -48,8 +55,9 @@ class ProgressRpcServiceImpl(
 
     override suspend fun getPlayerView(player: UUID): PlayerView? = suspendTransaction {
         val event = events.getActiveEvent() ?: return@suspendTransaction null
+        if (mustVisitNpcFirst(event, player)) return@suspendTransaction PlayerView(event, emptyList())
         val markers = when (event.mode) {
-            EventMode.DAILY -> listOfNotNull(dailyMarker(event, player, clock.today()))
+            EventMode.DAILY -> dailyMarkers(event, player, clock.today())
             EventMode.COLLECT -> {
                 val collected = CollectionRepository.collectedMarkerIds(event.id, player)
                 MarkerRepository.findByEvent(event.id).filter { it.id !in collected }
@@ -58,27 +66,52 @@ class ProgressRpcServiceImpl(
         PlayerView(event, markers)
     }
 
+    /** Whether [event] hides every block from [player] until they talked to its NPC once. */
+    private suspend fun mustVisitNpcFirst(event: SeasonalEvent, player: UUID): Boolean =
+        event.npcVisitRequired && !NpcVisitRepository.hasVisited(event.id, player)
+
     /**
-     * Returns today's marker of [player], creating the assignment on the first view of the day.
-     * Null if the player already collected today or no package is left for them today.
+     * The markers [player] sees in a `DAILY` event: every pinned marker up to today they have not found,
+     * plus, on a day nothing is pinned to, their marker of the random pool.
      */
-    private suspend fun dailyMarker(event: SeasonalEvent, player: UUID, today: LocalDate): EventMarker? {
-        if (CollectionRepository.countOnDay(event.id, player, today) > 0) return null
-
-        AssignmentRepository.find(event.id, player, today)?.let { return MarkerRepository.findById(it) }
-
-        if (candidates(event, player, today).isEmpty()) return null
-
-        // Prefer markers the player has not found on earlier days; fall back to all of them.
+    private suspend fun dailyMarkers(event: SeasonalEvent, player: UUID, today: LocalDate): List<EventMarker> {
         val markers = MarkerRepository.findByEvent(event.id)
+        val keys = CollectionRepository.dedupKeys(event.id, player)
+        val pinned = DailySchedule.visible(markers, today, DedupKeys.pinnedDays(keys))
+        if (DailySchedule.isPinned(markers, today)) return pinned
+        return pinned + listOfNotNull(randomMarker(event, player, today, markers, keys))
+    }
+
+    /**
+     * Returns today's random-pool marker of [player], creating the assignment on the first view of the day.
+     * Null if the player already found it today, the pool is empty or no package is left for them today.
+     */
+    private suspend fun randomMarker(
+        event: SeasonalEvent,
+        player: UUID,
+        today: LocalDate,
+        markers: List<EventMarker>,
+        keys: Set<String>,
+    ): EventMarker? {
+        if (DedupKeys.random(today) in keys) return null
+        val pool = markers.filter { it.day == null }
+
+        AssignmentRepository.find(event.id, player, today)?.let { assigned ->
+            pool.find { it.id == assigned }?.let { return it }
+            // The assigned marker was pinned since, so it left the pool: assign a new one instead.
+            AssignmentRepository.delete(event.id, player, today)
+        }
+
+        if (pool.isEmpty() || candidates(event, player, today).isEmpty()) return null
+
+        // Prefer markers the player has not found on earlier days; fall back to the whole pool.
         val collected = CollectionRepository.collectedMarkerIds(event.id, player)
-        val fresh = markers.filter { it.id !in collected }.ifEmpty { markers }
-        val markerId = fresh.randomOrNull(random)?.id ?: return null
+        val markerId = pool.filter { it.id !in collected }.ifEmpty { pool }.random(random).id
 
         AssignmentRepository.insert(event.id, player, today, markerId)
         // Read back: a parallel first view may have inserted a different marker.
         val assigned = AssignmentRepository.find(event.id, player, today) ?: return null
-        return MarkerRepository.findById(assigned)
+        return pool.find { it.id == assigned }
     }
 
     override suspend fun getEditView(eventId: ULong): List<EventMarker> = MarkerRepository.findByEvent(eventId)
@@ -115,7 +148,7 @@ class ProgressRpcServiceImpl(
                     markerId = markerId,
                     packageId = packageId,
                     day = check.today,
-                    dedupKey = CollectionRepository.dedupKey(check.event.mode, check.today, markerId),
+                    dedupKey = DedupKeys.forCollection(check.event.mode, check.today, check.marker),
                 )
                 if (booked) CollectResult.Success(lootPackage) else CollectResult.AlreadyCollected
             }
@@ -124,22 +157,30 @@ class ProgressRpcServiceImpl(
     override suspend fun getStatus(player: UUID): PlayerStatus = suspendTransaction {
         val event = events.getActiveEvent() ?: return@suspendTransaction PlayerStatus.NoActiveEvent
         val today = clock.today()
-        val collectedToday = CollectionRepository.countOnDay(event.id, player, today)
         val found = CollectionRepository.count(event.id, player)
 
         when (event.mode) {
             EventMode.DAILY -> {
+                val markers = MarkerRepository.findByEvent(event.id)
+                val keys = CollectionRepository.dedupKeys(event.id, player)
+                val pinnedToday = DailySchedule.isPinned(markers, today)
                 val open = openPackages(event.id, player).size
                 PlayerStatus.Daily(
                     event = event,
                     today = StatusRules.dailyToday(
-                        collectedToday = collectedToday > 0,
-                        hasBlock = AssignmentRepository.find(event.id, player, today)
-                            ?.let { MarkerRepository.findById(it) } != null,
+                        collectedToday = if (pinnedToday) DedupKeys.pinned(today) in keys else DedupKeys.random(today) in keys,
+                        hasBlock = pinnedToday || AssignmentRepository.find(event.id, player, today)
+                            ?.let { assigned -> DailySchedule.ownsRandomMarker(markers, today, assigned, assigned) } == true,
                         openPackages = open,
                     ),
                     found = found,
                     total = found + open,
+                    openEarlier = DailySchedule.openEarlier(
+                        DailySchedule.pinnedDays(markers),
+                        today,
+                        DedupKeys.pinnedDays(keys),
+                    ),
+                    npcVisitNeeded = mustVisitNpcFirst(event, player),
                 )
             }
 
@@ -151,14 +192,128 @@ class ProgressRpcServiceImpl(
                     foundStillMarked = CollectionRepository.collectedMarkerIds(event.id, player).size,
                     markerCount = MarkerRepository.count(event.id),
                 ),
-                remainingToday = StatusRules.remainingToday(event.dailyLimit, collectedToday),
+                remainingToday = StatusRules.remainingToday(
+                    event.dailyLimit,
+                    CollectionRepository.countOnDay(event.id, player, today),
+                ),
+                npcVisitNeeded = mustVisitNpcFirst(event, player),
             )
         }
     }
 
+    override suspend fun visitNpc(player: UUID, eventId: ULong, npcName: String): NpcStatus = suspendTransaction {
+        val event = activeEventOfNpc(eventId, npcName) ?: return@suspendTransaction NpcStatus.NoActiveEvent
+        val today = clock.today()
+        val firstVisit = NpcVisitRepository.recordVisit(event.id, player, clock.now())
+        val progress = npcProgress(event, player)
+
+        NpcStatus.Active(
+            event = event,
+            firstVisit = firstVisit,
+            today = NpcRules.today(progress.pinnedDays, progress.foundDays, today),
+            openEarlier = DailySchedule.openEarlier(progress.pinnedDays, today, progress.foundDays),
+            found = progress.foundDays.size,
+            total = NpcRules.total(progress.pinnedDays, progress.foundDays),
+            reward = progress.reward(today),
+        )
+    }
+
+    /**
+     * The active event if it is [eventId] and [npcName] is its linked NPC. The event's NPC name is the
+     * authority: an NPC whose link outlived a relink or the event's deletion is not treated as the event's NPC.
+     */
+    private suspend fun activeEventOfNpc(eventId: ULong, npcName: String): SeasonalEvent? =
+        events.getActiveEvent()?.takeIf { it.id == eventId && it.npcName == npcName }
+
+    override suspend fun previewReward(player: UUID, eventId: ULong): RewardResult = suspendTransaction {
+        when (val check = checkReward(player, eventId)) {
+            is RewardCheck.Denied -> check.result
+            is RewardCheck.Allowed -> LootRepository.findById(check.reward.id)
+                ?.takeIf { it.items.isNotEmpty() }
+                ?.let { RewardResult.Preview(it.id, it.items) }
+                ?: RewardResult.NoReward
+        }
+    }
+
+    override suspend fun claimReward(player: UUID, eventId: ULong, packageId: ULong): RewardResult = lockFor(player).withLock {
+        suspendTransaction {
+            val check = when (val check = checkReward(player, eventId)) {
+                is RewardCheck.Denied -> return@suspendTransaction check.result
+                is RewardCheck.Allowed -> check
+            }
+            if (check.reward.id != packageId) return@suspendTransaction RewardResult.PackageUnavailable
+            val lootPackage = LootRepository.findById(packageId)?.takeIf { it.items.isNotEmpty() }
+                ?: return@suspendTransaction RewardResult.PackageUnavailable
+
+            val booked = CollectionRepository.insert(
+                eventId = check.event.id,
+                player = player,
+                markerId = null,
+                packageId = packageId,
+                day = check.today,
+                dedupKey = DedupKeys.NPC_REWARD,
+            )
+            if (booked) RewardResult.Granted(lootPackage) else RewardResult.AlreadyClaimed
+        }
+    }
+
+    /** What the NPC needs to know about [player]: pinned days, found days and the reward package. */
+    private class NpcProgress(
+        val pinnedDays: Set<LocalDate>,
+        val foundDays: Set<LocalDate>,
+        val rewardClaimed: Boolean,
+        val reward: PackageRef?,
+    ) {
+        fun reward(today: LocalDate): NpcReward =
+            NpcRules.reward(reward?.fixedDay, rewardClaimed, pinnedDays, foundDays, today)
+    }
+
+    private suspend fun npcProgress(event: SeasonalEvent, player: UUID): NpcProgress {
+        val keys = CollectionRepository.dedupKeys(event.id, player)
+        return NpcProgress(
+            pinnedDays = DailySchedule.pinnedDays(MarkerRepository.findByEvent(event.id)),
+            foundDays = DedupKeys.pinnedDays(keys),
+            rewardClaimed = DedupKeys.NPC_REWARD in keys,
+            reward = LootRepository.findFilledRefs(event.id).firstOrNull { it.npcReward },
+        )
+    }
+
+    private sealed interface RewardCheck {
+        data class Denied(val result: RewardResult) : RewardCheck
+        data class Allowed(val event: SeasonalEvent, val today: LocalDate, val reward: PackageRef) : RewardCheck
+    }
+
+    /**
+     * Runs every rule shared by [previewReward] and [claimReward]. [eventId] is the event of the dialog the
+     * claim comes from; a dialog that outlived its event cannot claim for the next one.
+     */
+    private suspend fun checkReward(player: UUID, eventId: ULong): RewardCheck {
+        val event = events.getActiveEvent()?.takeIf { it.id == eventId }
+            ?: return RewardCheck.Denied(RewardResult.NoActiveEvent)
+        if (mustVisitNpcFirst(event, player)) return RewardCheck.Denied(RewardResult.NotVisited)
+        val today = clock.today()
+        val progress = npcProgress(event, player)
+        val reward = when (val state = progress.reward(today)) {
+            NpcReward.None -> return RewardCheck.Denied(RewardResult.NoReward)
+            NpcReward.Claimed -> return RewardCheck.Denied(RewardResult.AlreadyClaimed)
+            is NpcReward.Waiting -> return RewardCheck.Denied(RewardResult.NotYet(state.day, state.missing))
+            NpcReward.Ready -> checkNotNull(progress.reward)
+        }
+        // Each package reaches a player at most once, also if it was found on the map before it became the reward.
+        if (reward.id in CollectionRepository.receivedPackageIds(event.id, player)) {
+            return RewardCheck.Denied(RewardResult.AlreadyClaimed)
+        }
+        return RewardCheck.Allowed(event, today, reward)
+    }
+
     private sealed interface Check {
         data class Denied(val result: PreviewResult) : Check
-        data class Allowed(val event: SeasonalEvent, val today: LocalDate, val candidates: List<PackageRef>) : Check
+        data class Allowed(
+            val event: SeasonalEvent,
+            val today: LocalDate,
+            val marker: EventMarker,
+            val candidates: List<PackageRef>,
+        ) : Check
     }
 
     /** Runs every rule shared by [previewCollect] and [collect]. */
@@ -166,19 +321,34 @@ class ProgressRpcServiceImpl(
         val event = events.getActiveEvent()
         val today = clock.today()
         val marker = MarkerRepository.findById(markerId)?.takeIf { event != null && it.eventId == event.id }
-        val collectedToday = event?.let { CollectionRepository.countOnDay(it.id, player, today) } ?: 0
+        val keys = event?.let { CollectionRepository.dedupKeys(it.id, player) }.orEmpty()
 
         val ownsMarker: Boolean
         val alreadyCollected: Boolean
+        var collectedToday = 0
         when (event?.mode) {
             EventMode.DAILY -> {
-                ownsMarker = marker != null && AssignmentRepository.find(event.id, player, today) == markerId
-                alreadyCollected = collectedToday > 0
+                val pinnedDay = marker?.day
+                if (pinnedDay != null) {
+                    // A pinned marker belongs to everyone from its day on, also on any later day.
+                    ownsMarker = !pinnedDay.isAfter(today)
+                    alreadyCollected = DedupKeys.pinned(pinnedDay) in keys
+                } else {
+                    // Same rules as the player's view, so a block that is not shown cannot be collected.
+                    ownsMarker = marker != null && DailySchedule.ownsRandomMarker(
+                        markers = MarkerRepository.findByEvent(event.id),
+                        today = today,
+                        markerId = markerId,
+                        assignedId = AssignmentRepository.find(event.id, player, today),
+                    )
+                    alreadyCollected = DedupKeys.random(today) in keys
+                }
             }
 
             EventMode.COLLECT -> {
                 ownsMarker = marker != null
-                alreadyCollected = markerId in CollectionRepository.collectedMarkerIds(event.id, player)
+                alreadyCollected = DedupKeys.marker(markerId) in keys
+                collectedToday = CollectionRepository.countOnDay(event.id, player, today)
             }
 
             null -> {
@@ -189,22 +359,26 @@ class ProgressRpcServiceImpl(
 
         CollectRules.check(
             event = event,
-            ownsMarker = ownsMarker,
+            // Blocks are hidden until the NPC visit, so they cannot be collected before it either.
+            ownsMarker = ownsMarker && (event == null || !mustVisitNpcFirst(event, player)),
             alreadyCollected = alreadyCollected,
             collectedToday = collectedToday,
         )?.let { return Check.Denied(it) }
 
-        checkNotNull(event) // CollectRules returns NoActiveEvent otherwise
-        return Check.Allowed(event, today, candidates(event, player, today))
+        // CollectRules returns NoActiveEvent or NotYours otherwise.
+        checkNotNull(event)
+        checkNotNull(marker)
+        // A caught-up pinned marker gets the package of its own day, not today's.
+        return Check.Allowed(event, today, marker, candidates(event, player, marker.day ?: today))
     }
 
-    /** The filled packages [player] may receive today, following [PackagePicker]. */
-    private suspend fun candidates(event: SeasonalEvent, player: UUID, today: LocalDate): List<PackageRef> =
+    /** The filled packages [player] may receive for [day], following [PackagePicker]. */
+    private suspend fun candidates(event: SeasonalEvent, player: UUID, day: LocalDate): List<PackageRef> =
         PackagePicker.candidates(
             mode = event.mode,
             packages = LootRepository.findFilledRefs(event.id),
             receivedIds = CollectionRepository.receivedPackageIds(event.id, player),
-            today = today,
+            today = day,
         )
 
     /** Filled packages that [player] has not received yet, regardless of fixed days. */

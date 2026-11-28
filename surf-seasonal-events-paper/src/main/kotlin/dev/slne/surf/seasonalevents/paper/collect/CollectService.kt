@@ -13,6 +13,7 @@ import dev.slne.surf.seasonalevents.paper.command.inventoryFullMessage
 import dev.slne.surf.seasonalevents.paper.command.message
 import dev.slne.surf.seasonalevents.paper.command.unavailableMessage
 import dev.slne.surf.seasonalevents.paper.gui.LootItems
+import dev.slne.surf.seasonalevents.paper.hud.GiftHud
 import dev.slne.surf.seasonalevents.paper.plugin
 import dev.slne.surf.seasonalevents.paper.render.FakeBlockRenderer.toLocation
 import dev.slne.surf.seasonalevents.paper.render.ViewService
@@ -21,8 +22,6 @@ import org.bukkit.Particle
 import org.bukkit.Sound
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
-import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Collecting a marker: preview the package, check the inventory, book it, then hand out the items.
@@ -30,21 +29,13 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object CollectService {
 
-    /** Players with a click in progress; further clicks are ignored until it is done. */
-    private val busy = ConcurrentHashMap.newKeySet<UUID>()
-
     /** Throttles clicks that would be answered right away, e.g. "not yours" or "already collected". */
     private val cooldown = ClickCooldown()
 
     /** Handles a click on [marker]; can be called from any thread. */
     suspend fun handleClick(player: Player, marker: EventMarker) {
         if (!cooldown.tryAcquire(player.uniqueId)) return
-        if (!busy.add(player.uniqueId)) return
-        try {
-            collect(player, marker)
-        } finally {
-            busy.remove(player.uniqueId)
-        }
+        PlayerClaims.exclusive(player.uniqueId) { collect(player, marker) }
     }
 
     private suspend fun collect(player: Player, marker: EventMarker) {
@@ -75,13 +66,14 @@ object CollectService {
             ViewService.reload(player)
         }
         player.sendMessage(result.message(itemCount = items.sumOf { it.amount }))
+        if (result is CollectResult.Success) GiftHud.showProgress(player)
     }
 
     /**
      * Gives [items]; whatever no longer fits (the inventory changed since the check) is dropped. Only the
-     * player can pick it up, and it never despawns.
+     * player can pick it up, and it never despawns. Must run on the player's thread.
      */
-    private fun give(player: Player, items: List<ItemStack>) {
+    fun give(player: Player, items: List<ItemStack>) {
         player.inventory.addItem(*items.toTypedArray()).values.forEach { leftover ->
             player.world.dropItem(player.location, leftover) {
                 it.owner = player.uniqueId

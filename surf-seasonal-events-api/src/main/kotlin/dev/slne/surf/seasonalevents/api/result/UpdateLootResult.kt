@@ -33,6 +33,18 @@ sealed interface UpdateLootResult {
     @Serializable
     data class NotEnoughPackages(val filled: Int, val needed: Int) : UpdateLootResult
 
+    /** An NPC reward needs a fixed day: the day from which the NPC hands it out. */
+    @Serializable
+    data object NpcRewardNeedsFixedDay : UpdateLootResult
+
+    /** Another package of this event already is the NPC reward. */
+    @Serializable
+    data object NpcRewardTaken : UpdateLootResult
+
+    /** Players already found this package on the map, so it cannot become the NPC reward anymore. */
+    @Serializable
+    data object AlreadyHandedOut : UpdateLootResult
+
     /** Someone else saved the package since it was opened; nothing was changed. */
     @Serializable
     data object Conflict : UpdateLootResult

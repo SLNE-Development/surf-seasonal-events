@@ -20,6 +20,7 @@ import dev.slne.surf.api.paper.inventory.framework.view.settings.PaginationViewR
 import dev.slne.surf.seasonalevents.api.event.EventMode
 import dev.slne.surf.seasonalevents.api.event.SeasonalEvent
 import dev.slne.surf.seasonalevents.api.loot.LootPackage
+import dev.slne.surf.seasonalevents.api.marker.EventMarker
 import dev.slne.surf.seasonalevents.api.result.UpdateLootResult
 import dev.slne.surf.seasonalevents.core.client.rpc.RpcOutcome
 import dev.slne.surf.seasonalevents.core.client.rpc.lootRpc
@@ -32,7 +33,7 @@ import kotlinx.coroutines.withContext
 import org.bukkit.entity.Player
 
 /** What the overview is opened with: the event and its packages, loaded beforehand by [openLootOverview]. */
-private class LootOverviewData(val event: SeasonalEvent, val packages: List<LootPackage>, val markerCount: Int)
+private class LootOverviewData(val event: SeasonalEvent, val packages: List<LootPackage>, val markers: List<EventMarker>)
 
 /** All loot packages of an event; open it with [openLootOverview]. */
 val lootOverviewView: AbstractPaginatedSurfView = paginatedSurfView("Loot-Pakete") {
@@ -69,7 +70,7 @@ val lootOverviewView: AbstractPaginatedSurfView = paginatedSurfView("Loot-Pakete
         slot(4, 8) {
             onItemRender {
                 val data = initialData as LootOverviewData
-                item = lootInfoIcon(data.event, data.packages, data.markerCount)
+                item = lootInfoIcon(data.event, data.packages, data.markers)
             }
         }
         slot(4, 9) {
@@ -87,11 +88,11 @@ val lootOverviewView: AbstractPaginatedSurfView = paginatedSurfView("Loot-Pakete
 /** Loads the packages of [event] and opens the overview with them; can be called from any thread. */
 fun openLootOverview(player: Player, event: SeasonalEvent) {
     plugin.launch {
-        val outcome = rpcCall { lootRpc.findByEvent(event.id) to markerRpc.findByEvent(event.id).size }
+        val outcome = rpcCall { lootRpc.findByEvent(event.id) to markerRpc.findByEvent(event.id) }
         if (outcome !is RpcOutcome.Ok) return@launch player.sendMessage(unavailableMessage())
         withContext(plugin.entityDispatcher(player)) {
-            val (packages, markerCount) = outcome.value
-            if (player.isOnline) lootOverviewView.open(player, LootOverviewData(event, packages, markerCount))
+            val (packages, markers) = outcome.value
+            if (player.isOnline) lootOverviewView.open(player, LootOverviewData(event, packages, markers))
         }
     }
 }

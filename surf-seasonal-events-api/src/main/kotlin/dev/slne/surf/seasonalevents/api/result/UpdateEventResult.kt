@@ -28,4 +28,8 @@ sealed interface UpdateEventResult {
     /** The display name is blank or longer than [dev.slne.surf.seasonalevents.api.event.SeasonalEvent.MAX_DISPLAY_NAME_LENGTH]. */
     @Serializable
     data object InvalidDisplayName : UpdateEventResult
+
+    /** The NPC name is blank or longer than [dev.slne.surf.seasonalevents.api.event.SeasonalEvent.MAX_NPC_NAME_LENGTH]. */
+    @Serializable
+    data object InvalidNpcName : UpdateEventResult
 }

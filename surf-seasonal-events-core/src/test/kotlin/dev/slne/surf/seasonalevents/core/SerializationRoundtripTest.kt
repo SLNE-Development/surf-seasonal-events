@@ -8,6 +8,9 @@ import dev.slne.surf.seasonalevents.api.loot.LootPackage
 import dev.slne.surf.seasonalevents.api.marker.EventMarker
 import dev.slne.surf.seasonalevents.api.marker.MarkerPosition
 import dev.slne.surf.seasonalevents.api.progress.DailyToday
+import dev.slne.surf.seasonalevents.api.progress.NpcReward
+import dev.slne.surf.seasonalevents.api.progress.NpcStatus
+import dev.slne.surf.seasonalevents.api.progress.NpcToday
 import dev.slne.surf.seasonalevents.api.progress.PlayerStatus
 import dev.slne.surf.seasonalevents.api.progress.PlayerView
 import dev.slne.surf.seasonalevents.api.result.*
@@ -24,6 +27,7 @@ import java.util.*
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 /** Same serializers surf-rabbitmq uses: the surf-api defaults. */
 @OptIn(ExperimentalSerializationApi::class)
@@ -156,6 +160,7 @@ class SerializationRoundtripTest {
             UpdateEventResult.NotFound,
             UpdateEventResult.AlreadyEnded,
             UpdateEventResult.InvalidDisplayName,
+            UpdateEventResult.InvalidNpcName,
             UpdateEventResult.NotEnoughPackages(filled = 20, needed = 24),
         )
         cases.forEach { assertEquals(it, roundtrip<UpdateEventResult>(it)) }
@@ -292,5 +297,86 @@ class SerializationRoundtripTest {
             CollectResult.PackageUnavailable,
         )
         cases.forEach { assertEquals(it, roundtrip<CollectResult>(it)) }
+    }
+
+    @Test
+    fun `pinned marker keeps its day`() {
+        val pinned = marker.copy(day = LocalDate.of(2026, 12, 5))
+        assertEquals(pinned, roundtrip(pinned))
+    }
+
+    @Test
+    fun `npc reward flag survives roundtrip`() {
+        val reward = LootPackage(5u, 1u, "Geschenk 24", byteArrayOf(1), LocalDate.of(2026, 12, 24), npcReward = true)
+        assertEquals(true, roundtrip(reward).npcReward)
+    }
+
+    @Test
+    fun `npc visit requirement survives roundtrip`() {
+        val gated = event.copy(npcName = "weihnachtsmann")
+        assertEquals(gated, roundtrip(gated))
+        assertTrue(roundtrip(gated).npcVisitRequired)
+        val daily: PlayerStatus = PlayerStatus.Daily(gated, DailyToday.HIDDEN, found = 0, total = 24, npcVisitNeeded = true)
+        val collect: PlayerStatus = PlayerStatus.Collect(gated, found = 0, total = 10, remainingToday = null, npcVisitNeeded = true)
+        assertEquals(daily, roundtrip<PlayerStatus>(daily))
+        assertEquals(collect, roundtrip<PlayerStatus>(collect))
+    }
+
+    @Test
+    fun `daily status keeps open earlier days`() {
+        val status: PlayerStatus = PlayerStatus.Daily(event, DailyToday.HIDDEN, found = 2, total = 24, openEarlier = 3)
+        assertEquals(status, roundtrip<PlayerStatus>(status))
+    }
+
+    @Test
+    fun `every npc status case survives roundtrip`() {
+        val rewards = listOf(
+            NpcReward.None,
+            NpcReward.Waiting(LocalDate.of(2026, 12, 24), missing = 4),
+            NpcReward.Ready,
+            NpcReward.Claimed,
+        )
+        val cases: List<NpcStatus> = listOf(NpcStatus.NoActiveEvent) + rewards.flatMap { reward ->
+            NpcToday.entries.map { today ->
+                NpcStatus.Active(event, firstVisit = true, today, openEarlier = 1, found = 5, total = 23, reward)
+            }
+        }
+        cases.forEach { assertEquals(it, roundtrip<NpcStatus>(it)) }
+    }
+
+    @Test
+    fun `every reward result case survives roundtrip`() {
+        val granted = roundtrip<RewardResult>(RewardResult.Granted(lootPackage))
+        assertContentEquals(lootPackage.items, assertIs<RewardResult.Granted>(granted).lootPackage.items)
+
+        val cases: List<RewardResult> = listOf(
+            RewardResult.Preview(packageId = 3u, items = byteArrayOf(4, 5)),
+            RewardResult.NotYet(LocalDate.of(2026, 12, 24), missing = 2),
+            RewardResult.AlreadyClaimed,
+            RewardResult.NoReward,
+            RewardResult.NoActiveEvent,
+            RewardResult.NotVisited,
+            RewardResult.PackageUnavailable,
+        )
+        cases.forEach { assertEquals(it, roundtrip<RewardResult>(it)) }
+    }
+
+    @Test
+    fun `every marker day result case survives roundtrip`() {
+        val cases: List<MarkerDayResult> = listOf(
+            MarkerDayResult.Success(marker.copy(day = LocalDate.of(2026, 12, 1))),
+            MarkerDayResult.NotFound,
+            MarkerDayResult.NotDailyEvent,
+            MarkerDayResult.DayTaken,
+            MarkerDayResult.EventEnded,
+            MarkerDayResult.NotEnoughPackages(filled = 22, needed = 23),
+        )
+        cases.forEach { assertEquals(it, roundtrip<MarkerDayResult>(it)) }
+    }
+
+    @Test
+    fun `new update loot result cases survive roundtrip`() {
+        val cases: List<UpdateLootResult> = listOf(UpdateLootResult.NpcRewardNeedsFixedDay, UpdateLootResult.NpcRewardTaken, UpdateLootResult.AlreadyHandedOut)
+        cases.forEach { assertEquals(it, roundtrip<UpdateLootResult>(it)) }
     }
 }

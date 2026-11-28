@@ -7,7 +7,9 @@ by clicking them.
 Two modes:
 
 - **DAILY** – each player gets one block per day. Packages are handed out at random; a package can be
-  pinned to a fixed day, which then takes precedence.
+  pinned to a fixed day, which then takes precedence. A block can also be pinned to a day: it is then that
+  day's hiding spot for everyone and stays until found, so players who start late catch up on every
+  earlier day. One package can be the NPC reward, handed out by a surf-npc NPC (see below).
 - **COLLECT** – every marked block can be found once per player, optionally limited per day. Each found
   block gives its own package, so the event needs at least one filled package per marker.
 
@@ -62,7 +64,7 @@ All under `/seasonalevents`. Without a subcommand it shows the player's status f
 | `info <event>` | `.info` |
 | `create <name> <daily\|collect> <markerLimit> [dailyLimit]` | `.create` |
 | `displayname <event> <MiniMessage>` | `.edit` |
-| `edit <event>` – marker tool, left click marks, right click unmarks | `.edit` |
+| `edit <event>` – marker tool, left click marks, right click unmarks, sneak + right click pins a day | `.edit` |
 | `setend <event> <yyyy-MM-ddTHH:mm\|none>` | `.edit` |
 | `loot <event>` – loot package GUI | `.loot` |
 | `copyloot <from> <to>` – copies packages, not fixed days | `.loot` |
@@ -70,8 +72,26 @@ All under `/seasonalevents`. Without a subcommand it shows the player's status f
 | `stop` | `.stop` |
 | `restore <event>` – puts the real blocks back | `.restore` |
 | `delete <event>` | `.delete` |
+| `npc <event> <npc> [remove]` – links a surf-npc NPC to the event (only with surf-npc) | `.npc` |
 
 Every subcommand also requires the base permission. Times are Europe/Berlin.
+
+## Advent calendar with an NPC (e.g. Christmas)
+
+1. `create christmas-2026 daily 23`, then `edit christmas-2026` and mark 23 blocks.
+2. Sneak + right click each marker with the tool and pin it to its day (01.12. to 23.12.). From that day
+   on it is visible to everyone until they found it; nothing expires.
+3. In `loot christmas-2026` fill the packages. Packages without a fixed day are random, a fixed day gives
+   that package for the block of that day. Give one package the fixed day 24.12. and switch on
+   *NPC-Belohnung*: it is never found on the map, the NPC hands it out from the 24th on to everyone who
+   found all blocks of the days before.
+4. Create the NPC with surf-npc and link it: `npc christmas-2026 <npc name>`. Clicking it shows a dialog
+   that depends on the date and the player's progress (introduction on the first talk, today's gift,
+   older gifts to catch up, the reward, a farewell). An event has at most one NPC; linking another one
+   replaces it. While an NPC is linked, players see the blocks only after talking to it once;
+   `npc christmas-2026 <npc name> remove` lifts that again. `start` warns if the linked NPC is missing.
+5. `start christmas-2026 2026-12-31T23:59`. Each find shows the progress for a few seconds in surf-hud if
+   it runs, otherwise in the action bar.
 
 ## Event lifecycle
 

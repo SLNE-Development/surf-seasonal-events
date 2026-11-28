@@ -12,10 +12,12 @@ object PackagePicker {
      *
      * In a `DAILY` event, the package fixed to [today] wins. Otherwise a random package without a fixed day
      * is chosen; packages fixed to other days are kept for their day. In a `COLLECT` event, fixed days are
-     * ignored and any package not yet received may be chosen.
+     * ignored and any package not yet received may be chosen. The NPC reward is never chosen; only the NPC
+     * hands it out.
      *
      * @param packages the filled packages of the event
      * @param receivedIds ids of the packages the player already received in this event
+     * @param today the day the package is for: the pinned day of a caught-up marker, otherwise today
      * @return null if nothing is left for the player
      */
     fun pick(
@@ -36,7 +38,7 @@ object PackagePicker {
         receivedIds: Set<ULong>,
         today: LocalDate,
     ): List<PackageRef> {
-        val open = packages.filter { it.id !in receivedIds }
+        val open = packages.filter { it.id !in receivedIds && !it.npcReward }
 
         return when (mode) {
             EventMode.COLLECT -> open

@@ -1,16 +1,19 @@
 package dev.slne.surf.seasonalevents.microservice.rpc
 
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.transactions.suspendTransaction
+import dev.slne.surf.seasonalevents.api.event.EventMode
 import dev.slne.surf.seasonalevents.api.event.EventState
 import dev.slne.surf.seasonalevents.api.marker.EventMarker
 import dev.slne.surf.seasonalevents.api.marker.MarkerPosition
 import dev.slne.surf.seasonalevents.api.result.MarkResult
+import dev.slne.surf.seasonalevents.api.result.MarkerDayResult
 import dev.slne.surf.seasonalevents.api.result.RestoreResult
 import dev.slne.surf.seasonalevents.api.result.UnmarkResult
 import dev.slne.surf.seasonalevents.core.rpc.MarkerRpcService
 import dev.slne.surf.seasonalevents.microservice.db.repository.EventRepository
 import dev.slne.surf.seasonalevents.microservice.db.repository.MarkerRepository
 import dev.slne.surf.seasonalevents.microservice.logic.MarkerRules
+import java.time.LocalDate
 import java.util.UUID
 
 /**
@@ -36,7 +39,7 @@ object MarkerRpcServiceImpl : MarkerRpcService {
                 positionTaken = MarkerRepository.findByPosition(position) != null,
             )?.let { return@suspendTransaction it }
             PackageGuard.shortageAfter(event, addedMarkers = 1)?.let {
-                return@suspendTransaction MarkResult.NotEnoughPackages(it.filled, it.needed)
+                return@suspendTransaction MarkResult.NotEnoughPackages(it.covered, it.needed)
             }
 
             val marker = MarkerRepository.insert(eventId, position, blockData, skullTexture, markedBy)
@@ -55,6 +58,26 @@ object MarkerRpcServiceImpl : MarkerRpcService {
                 markerCount = MarkerRepository.count(marker.eventId),
                 markerLimit = EventRepository.findById(marker.eventId)?.markerLimit ?: 0,
             )
+        }
+    }
+
+    override suspend fun setDay(markerId: ULong, day: LocalDate?): MarkerDayResult = StaffWriteLock.withLock {
+        suspendTransaction {
+            val marker = MarkerRepository.findById(markerId) ?: return@suspendTransaction MarkerDayResult.NotFound
+            val event = EventRepository.findById(marker.eventId) ?: return@suspendTransaction MarkerDayResult.NotFound
+            if (event.state == EventState.ENDED) return@suspendTransaction MarkerDayResult.EventEnded
+            if (event.mode != EventMode.DAILY) return@suspendTransaction MarkerDayResult.NotDailyEvent
+            if (day != null && MarkerRepository.isDayTaken(event.id, day, exceptId = markerId)) {
+                return@suspendTransaction MarkerDayResult.DayTaken
+            }
+            val pinnedAfter = MarkerRepository.findByEvent(event.id)
+                .mapNotNullTo(HashSet()) { if (it.id == markerId) day else it.day }
+            PackageGuard.shortageAfter(event, pinnedDays = pinnedAfter)?.let {
+                return@suspendTransaction MarkerDayResult.NotEnoughPackages(it.covered, it.needed)
+            }
+
+            val updated = MarkerRepository.updateDay(markerId, day) ?: return@suspendTransaction MarkerDayResult.NotFound
+            MarkerDayResult.Success(updated)
         }
     }
 

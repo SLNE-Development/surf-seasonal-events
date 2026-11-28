@@ -36,6 +36,10 @@ sealed interface PlayerStatus {
         val found: Int,
         /** Number of packages the player can receive in total: those received plus those still open. */
         val total: Int,
+        /** Pinned markers of earlier days the player has not found yet and can still catch up. */
+        val openEarlier: Int = 0,
+        /** The player sees no block until they talked to the event's NPC once. */
+        val npcVisitNeeded: Boolean = false,
     ) : PlayerStatus
 
     /** Progress in a [dev.slne.surf.seasonalevents.api.event.EventMode.COLLECT] event. */
@@ -48,5 +52,7 @@ sealed interface PlayerStatus {
         val total: Int,
         /** Remaining collections today; null when the event has no daily limit. */
         val remainingToday: Int?,
+        /** The player sees no block until they talked to the event's NPC once. */
+        val npcVisitNeeded: Boolean = false,
     ) : PlayerStatus
 }

@@ -19,9 +19,8 @@ import dev.slne.surf.seasonalevents.paper.plugin
 import io.papermc.paper.dialog.Dialog
 import kotlinx.coroutines.withContext
 import org.bukkit.entity.Player
+import dev.slne.surf.seasonalevents.paper.time.DayInput
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
 
 // Dialogs of the loot editor. Built per show, because their click callbacks work once.
 
@@ -101,15 +100,9 @@ fun deletePackageDialog(event: SeasonalEvent, lootPackage: LootPackage): Dialog 
 /** Wraps the result so "no fixed day" (null) can be told apart from invalid input. */
 private class Day(val value: LocalDate?)
 
-private val inputDayFormat = DateTimeFormatter.ofPattern("dd.MM.uuuu")
-
 private fun parseDay(input: String): Day? {
     if (input.isEmpty()) return Day(null)
-    return try {
-        Day(LocalDate.parse(input, inputDayFormat))
-    } catch (_: DateTimeParseException) {
-        null
-    }
+    return DayInput.parse(input)?.let(::Day)
 }
 
 private suspend fun setFixedDay(player: Player, event: SeasonalEvent, lootPackage: LootPackage, day: LocalDate?) {
@@ -125,6 +118,19 @@ private suspend fun setFixedDay(player: Player, event: SeasonalEvent, lootPackag
     }
     player.sendMessage(result.message())
     reopenEditor(player, event, lootPackage.id)
+}
+
+/**
+ * Makes [lootPackage] the reward of the event's NPC or turns that off again, then reopens the editor.
+ * The NPC hands the reward out from the package's fixed day on, so that day has to be set first.
+ */
+fun toggleNpcReward(player: Player, event: SeasonalEvent, lootPackage: LootPackage) {
+    plugin.launch {
+        val outcome = rpcCall { lootRpc.setNpcReward(lootPackage.id, !lootPackage.npcReward) }
+        if (outcome !is RpcOutcome.Ok) return@launch player.sendMessage(unavailableMessage())
+        player.sendMessage(outcome.value.message())
+        reopenEditor(player, event, lootPackage.id)
+    }
 }
 
 /** Loads the package again, so the editor shows the saved state, and opens it. */

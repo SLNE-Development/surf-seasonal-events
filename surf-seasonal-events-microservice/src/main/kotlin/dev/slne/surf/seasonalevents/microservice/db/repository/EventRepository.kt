@@ -32,7 +32,16 @@ object EventRepository {
         endsAt = this[SeasonalEventsTable.endsAt],
         startedAt = this[SeasonalEventsTable.startedAt],
         createdAt = this[SeasonalEventsTable.createdAt].toInstant(),
+        npcName = this[SeasonalEventsTable.npcName],
     )
+
+    /** Sets or clears the linked NPC and returns the event updated, or null if it does not exist. */
+    suspend fun updateNpcName(id: ULong, npcName: String?): SeasonalEvent? = suspendTransaction {
+        SeasonalEventsTable.update({ SeasonalEventsTable.id eq id }) {
+            it[SeasonalEventsTable.npcName] = npcName
+        }
+        findById(id)
+    }
 
     suspend fun findById(id: ULong): SeasonalEvent? = suspendTransaction {
         SeasonalEventsTable.selectAll()

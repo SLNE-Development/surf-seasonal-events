@@ -13,6 +13,7 @@ import dev.slne.surf.seasonalevents.core.rpc.EventRpcService
 import dev.slne.surf.seasonalevents.microservice.db.repository.EventRepository
 import dev.slne.surf.seasonalevents.microservice.db.repository.LootRepository
 import dev.slne.surf.seasonalevents.microservice.db.repository.MarkerRepository
+import dev.slne.surf.seasonalevents.microservice.logic.DailySchedule
 import dev.slne.surf.seasonalevents.microservice.logic.EventRules
 import dev.slne.surf.seasonalevents.microservice.logic.PackageRequirement
 import dev.slne.surf.seasonalevents.microservice.logic.SeasonalClock
@@ -42,13 +43,21 @@ class EventRpcServiceImpl(private val clock: SeasonalClock = SeasonalClock()) : 
             val target = EventRepository.findById(eventId)
                 ?: return@suspendTransaction StartEventResult.NotFound
 
-            val markerCount = MarkerRepository.count(eventId)
+            val markers = MarkerRepository.findByEvent(eventId)
+            val packages = LootRepository.findFilledRefs(eventId)
             EventRules.checkStart(
                 target = target,
                 active = getActiveEvent(),
-                markerCount = markerCount,
-                packageCount = LootRepository.countFilled(eventId),
-                requiredPackages = PackageRequirement.required(target.mode, markerCount, clock.today(), endsAt),
+                markerCount = markers.size,
+                packageCount = packages.count { !it.npcReward },
+                coverage = PackageRequirement.coverage(
+                    mode = target.mode,
+                    markerCount = markers.size,
+                    startDay = clock.today(),
+                    endsAt = endsAt,
+                    pinnedDays = DailySchedule.pinnedDays(markers),
+                    packages = packages,
+                ),
             )?.let { return@suspendTransaction it }
 
             val started = EventRepository.updateState(eventId, EventState.ACTIVE, startedAt = clock.now(), endsAt = endsAt)
@@ -85,12 +94,27 @@ class EventRpcServiceImpl(private val clock: SeasonalClock = SeasonalClock()) : 
             }
         }
 
+    override suspend fun setNpc(eventId: ULong, npcName: String?): UpdateEventResult =
+        StaffWriteLock.withLock {
+            suspendTransaction {
+                val event = EventRepository.findById(eventId) ?: return@suspendTransaction UpdateEventResult.NotFound
+                if (event.state == EventState.ENDED) return@suspendTransaction UpdateEventResult.AlreadyEnded
+                if (npcName != null && (npcName.isBlank() || npcName.length > SeasonalEvent.MAX_NPC_NAME_LENGTH)) {
+                    return@suspendTransaction UpdateEventResult.InvalidNpcName
+                }
+
+                val updated = EventRepository.updateNpcName(eventId, npcName)
+                    ?: return@suspendTransaction UpdateEventResult.NotFound
+                UpdateEventResult.Success(updated)
+            }
+        }
+
     override suspend fun setEnd(eventId: ULong, endsAt: Instant?): UpdateEventResult = StaffWriteLock.withLock {
         suspendTransaction {
             val event = EventRepository.findById(eventId) ?: return@suspendTransaction UpdateEventResult.NotFound
             if (event.state == EventState.ENDED) return@suspendTransaction UpdateEventResult.AlreadyEnded
             PackageGuard.shortageAfter(event, endsAt = endsAt)?.let {
-                return@suspendTransaction UpdateEventResult.NotEnoughPackages(it.filled, it.needed)
+                return@suspendTransaction UpdateEventResult.NotEnoughPackages(it.covered, it.needed)
             }
 
             val updated = EventRepository.updateEndsAt(eventId, endsAt)

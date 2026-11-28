@@ -1,6 +1,7 @@
 package dev.slne.surf.seasonalevents.paper.listener
 
 import com.github.shynixn.mccoroutine.folia.launch
+import dev.slne.surf.seasonalevents.paper.hud.GiftHud
 import dev.slne.surf.seasonalevents.paper.plugin
 import dev.slne.surf.seasonalevents.paper.render.ViewService
 import org.bukkit.event.EventHandler
@@ -20,5 +21,6 @@ object PlayerConnectionListener : Listener {
     @EventHandler
     fun onQuit(event: PlayerQuitEvent) {
         ViewService.forget(event.player.uniqueId)
+        GiftHud.forget(event.player.uniqueId)
     }
 }

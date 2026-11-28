@@ -70,6 +70,15 @@ interface EventRpcService {
     suspend fun setEnd(eventId: ULong, endsAt: Instant?): UpdateEventResult
 
     /**
+     * Links the surf-npc NPC [npcName] to the event, replacing a previous one, or removes the link with null.
+     * While an NPC is linked, players see blocks only after talking to it once.
+     *
+     * @return [UpdateEventResult.AlreadyEnded] if the event is `ENDED`,
+     * [UpdateEventResult.InvalidNpcName] if the name is blank or too long
+     */
+    suspend fun setNpc(eventId: ULong, npcName: String?): UpdateEventResult
+
+    /**
      * Ends the active event for good. Its markers stay in the database until they are restored.
      *
      * @return [StopEventResult.NoActiveEvent] if no event is running

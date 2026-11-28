@@ -15,6 +15,9 @@ object LootPackagesTable : AuditableLongIdTable("loot_packages") {
     /** Day on which the package is handed out in a `DAILY` event; null for random packages. */
     val fixedDay = date("fixed_day").nullable()
 
+    /** Whether the event's NPC hands the package out instead of a marker; at most one per event. */
+    val npcReward = bool("npc_reward").default(false)
+
     init {
         // NULL does not count as a duplicate, so any number of random packages is allowed.
         uniqueIndex("loot_packages_fixed_day_uq", eventId, fixedDay)

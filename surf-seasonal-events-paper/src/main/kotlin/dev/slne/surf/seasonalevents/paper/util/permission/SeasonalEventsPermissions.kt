@@ -21,4 +21,7 @@ object SeasonalEventsPermissions : PermissionRegistry() {
     val COMMAND_STOP = create("$COMMAND_SEASONAL_EVENTS.stop")
     val COMMAND_RESTORE = create("$COMMAND_SEASONAL_EVENTS.restore")
     val COMMAND_DELETE = create("$COMMAND_SEASONAL_EVENTS.delete")
+
+    /** Linking surf-npc NPCs to an event. */
+    val COMMAND_NPC = create("$COMMAND_SEASONAL_EVENTS.npc")
 }
