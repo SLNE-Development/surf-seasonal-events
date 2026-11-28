@@ -16,11 +16,12 @@ internal object NpcInteractListener : Listener {
 
     @EventHandler
     fun onInteract(event: NpcInteractEvent) {
-        val eventName = NpcLinks.eventNameOf(event.npc) ?: return
+        val eventId = NpcLinks.eventIdOf(event.npc) ?: return
         val player = event.player
         if (!cooldown.tryAcquire(player.uniqueId)) return
 
+        val npcName = event.npc.uniqueName
         val speaker = event.npc.getDisplayName()
-        plugin.launch { NpcConversation.talk(player, eventName, speaker) }
+        plugin.launch { NpcConversation.talk(player, eventId, npcName, speaker) }
     }
 }

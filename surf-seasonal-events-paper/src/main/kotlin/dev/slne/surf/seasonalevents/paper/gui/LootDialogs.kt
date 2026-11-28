@@ -19,9 +19,8 @@ import dev.slne.surf.seasonalevents.paper.plugin
 import io.papermc.paper.dialog.Dialog
 import kotlinx.coroutines.withContext
 import org.bukkit.entity.Player
+import dev.slne.surf.seasonalevents.paper.time.DayInput
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
 
 // Dialogs of the loot editor. Built per show, because their click callbacks work once.
 
@@ -101,15 +100,9 @@ fun deletePackageDialog(event: SeasonalEvent, lootPackage: LootPackage): Dialog 
 /** Wraps the result so "no fixed day" (null) can be told apart from invalid input. */
 private class Day(val value: LocalDate?)
 
-private val inputDayFormat = DateTimeFormatter.ofPattern("dd.MM.uuuu")
-
 private fun parseDay(input: String): Day? {
     if (input.isEmpty()) return Day(null)
-    return try {
-        Day(LocalDate.parse(input, inputDayFormat))
-    } catch (_: DateTimeParseException) {
-        null
-    }
+    return DayInput.parse(input)?.let(::Day)
 }
 
 private suspend fun setFixedDay(player: Player, event: SeasonalEvent, lootPackage: LootPackage, day: LocalDate?) {

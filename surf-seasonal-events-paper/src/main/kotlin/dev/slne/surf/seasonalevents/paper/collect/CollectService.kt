@@ -22,8 +22,6 @@ import org.bukkit.Particle
 import org.bukkit.Sound
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
-import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Collecting a marker: preview the package, check the inventory, book it, then hand out the items.
@@ -31,21 +29,13 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object CollectService {
 
-    /** Players with a click in progress; further clicks are ignored until it is done. */
-    private val busy = ConcurrentHashMap.newKeySet<UUID>()
-
     /** Throttles clicks that would be answered right away, e.g. "not yours" or "already collected". */
     private val cooldown = ClickCooldown()
 
     /** Handles a click on [marker]; can be called from any thread. */
     suspend fun handleClick(player: Player, marker: EventMarker) {
         if (!cooldown.tryAcquire(player.uniqueId)) return
-        if (!busy.add(player.uniqueId)) return
-        try {
-            collect(player, marker)
-        } finally {
-            busy.remove(player.uniqueId)
-        }
+        PlayerClaims.exclusive(player.uniqueId) { collect(player, marker) }
     }
 
     private suspend fun collect(player: Player, marker: EventMarker) {

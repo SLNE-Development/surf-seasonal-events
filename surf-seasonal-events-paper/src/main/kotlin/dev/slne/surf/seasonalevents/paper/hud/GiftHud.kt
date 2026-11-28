@@ -11,6 +11,7 @@ import dev.slne.surf.seasonalevents.core.client.rpc.rpcCall
 import dev.slne.surf.seasonalevents.paper.plugin
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.job
 import kotlinx.coroutines.withContext
 import net.kyori.adventure.text.Component
 import org.bukkit.Bukkit
@@ -64,6 +65,8 @@ object GiftHud {
             plugin.launch {
                 delay(SHOWN_FOR)
                 withContext(plugin.entityDispatcher(player)) { if (player.isOnline) SurfHudBridge.hide(player) }
+                // Only this job's own entry: a newer one may already have replaced it.
+                hideJobs.remove(player.uniqueId, coroutineContext.job)
             },
         )?.cancel()
         return true

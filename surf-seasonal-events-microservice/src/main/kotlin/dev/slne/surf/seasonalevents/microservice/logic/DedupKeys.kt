@@ -1,5 +1,7 @@
 package dev.slne.surf.seasonalevents.microservice.logic
 
+import dev.slne.surf.seasonalevents.api.event.EventMode
+import dev.slne.surf.seasonalevents.api.marker.EventMarker
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
 
@@ -21,6 +23,16 @@ object DedupKeys {
 
     /** The NPC reward was received. */
     const val NPC_REWARD = "R"
+
+    /**
+     * The key of collecting [marker] on [today]: per pinned day for a pinned marker and per collection day
+     * for a random-pool marker in a `DAILY` event, per marker in a `COLLECT` event. Progress of pinned markers
+     * belongs to the calendar day, so a marker moved to another day is that day's hiding spot from then on.
+     */
+    fun forCollection(mode: EventMode, today: LocalDate, marker: EventMarker): String = when (mode) {
+        EventMode.DAILY -> marker.day?.let(::pinned) ?: random(today)
+        EventMode.COLLECT -> marker(marker.id)
+    }
 
     /** The pinned days found according to [keys]. */
     fun pinnedDays(keys: Set<String>): Set<LocalDate> = keys.mapNotNullTo(HashSet()) { key ->

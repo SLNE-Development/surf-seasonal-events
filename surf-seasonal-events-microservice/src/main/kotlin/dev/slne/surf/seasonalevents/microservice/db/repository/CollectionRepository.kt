@@ -6,10 +6,8 @@ import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.insertIgnore
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.select
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.selectAll
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.transactions.suspendTransaction
-import dev.slne.surf.seasonalevents.api.event.EventMode
-import dev.slne.surf.seasonalevents.api.marker.EventMarker
 import dev.slne.surf.seasonalevents.microservice.db.table.CollectionsTable
-import dev.slne.surf.seasonalevents.microservice.logic.DedupKeys
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.toSet
@@ -18,15 +16,6 @@ import java.util.UUID
 
 /** Database access for [CollectionsTable]. Joins an outer transaction if one is open. */
 object CollectionRepository {
-
-    /**
-     * The key that makes a collection unique per player: once per pinned day or, for a random-pool marker,
-     * once per collection day in a `DAILY` event; once per marker in a `COLLECT` event.
-     */
-    fun dedupKey(mode: EventMode, today: LocalDate, marker: EventMarker): String = when (mode) {
-        EventMode.DAILY -> marker.day?.let(DedupKeys::pinned) ?: DedupKeys.random(today)
-        EventMode.COLLECT -> DedupKeys.marker(marker.id)
-    }
 
     /** The dedup keys of every collection of [player] in the event; tells which days and rewards are done. */
     suspend fun dedupKeys(eventId: ULong, player: UUID): Set<String> = suspendTransaction {
@@ -38,7 +27,7 @@ object CollectionRepository {
 
     /** Ids of the packages [player] received in the event; deleted packages are left out. */
     suspend fun receivedPackageIds(eventId: ULong, player: UUID): Set<ULong> = suspendTransaction {
-        CollectionsTable.selectAll()
+        CollectionsTable.select(CollectionsTable.packageId)
             .where { (CollectionsTable.eventId eq eventId) and (CollectionsTable.player eq player) }
             .mapNotNull { it[CollectionsTable.packageId]?.value }
             .toSet()
@@ -46,10 +35,18 @@ object CollectionRepository {
 
     /** Ids of the markers [player] collected in the event; unmarked markers are left out. */
     suspend fun collectedMarkerIds(eventId: ULong, player: UUID): Set<ULong> = suspendTransaction {
-        CollectionsTable.selectAll()
+        CollectionsTable.select(CollectionsTable.markerId)
             .where { (CollectionsTable.eventId eq eventId) and (CollectionsTable.player eq player) }
             .mapNotNull { it[CollectionsTable.markerId]?.value }
             .toSet()
+    }
+
+    /** Whether any player already received package [packageId]. */
+    suspend fun wasHandedOut(packageId: ULong): Boolean = suspendTransaction {
+        CollectionsTable.select(CollectionsTable.id)
+            .where { CollectionsTable.packageId eq packageId }
+            .limit(1)
+            .firstOrNull() != null
     }
 
     /** Number of all collections of [player] in the event, including those of unmarked markers. */

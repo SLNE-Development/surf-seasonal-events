@@ -6,7 +6,6 @@ import kotlinx.serialization.Serializable
 import java.time.LocalDate
 
 /** Whether today's pinned marker of a `DAILY` event is still waiting for the player. */
-@Serializable
 enum class NpcToday {
     /** Today has a pinned marker the player has not found yet. */
     GIFT_HIDDEN,

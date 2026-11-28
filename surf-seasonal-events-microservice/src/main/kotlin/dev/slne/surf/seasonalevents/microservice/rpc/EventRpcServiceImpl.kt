@@ -44,17 +44,19 @@ class EventRpcServiceImpl(private val clock: SeasonalClock = SeasonalClock()) : 
                 ?: return@suspendTransaction StartEventResult.NotFound
 
             val markers = MarkerRepository.findByEvent(eventId)
+            val packages = LootRepository.findFilledRefs(eventId)
             EventRules.checkStart(
                 target = target,
                 active = getActiveEvent(),
                 markerCount = markers.size,
-                packageCount = LootRepository.countFilled(eventId),
-                requiredPackages = PackageRequirement.required(
+                packageCount = packages.count { !it.npcReward },
+                coverage = PackageRequirement.coverage(
                     mode = target.mode,
                     markerCount = markers.size,
                     startDay = clock.today(),
                     endsAt = endsAt,
                     pinnedDays = DailySchedule.pinnedDays(markers),
+                    packages = packages,
                 ),
             )?.let { return@suspendTransaction it }
 
@@ -92,13 +94,16 @@ class EventRpcServiceImpl(private val clock: SeasonalClock = SeasonalClock()) : 
             }
         }
 
-    override suspend fun setNpcVisitRequired(eventId: ULong, required: Boolean): UpdateEventResult =
+    override suspend fun setNpc(eventId: ULong, npcName: String?): UpdateEventResult =
         StaffWriteLock.withLock {
             suspendTransaction {
                 val event = EventRepository.findById(eventId) ?: return@suspendTransaction UpdateEventResult.NotFound
                 if (event.state == EventState.ENDED) return@suspendTransaction UpdateEventResult.AlreadyEnded
+                if (npcName != null && (npcName.isBlank() || npcName.length > SeasonalEvent.MAX_NPC_NAME_LENGTH)) {
+                    return@suspendTransaction UpdateEventResult.InvalidNpcName
+                }
 
-                val updated = EventRepository.updateNpcVisitRequired(eventId, required)
+                val updated = EventRepository.updateNpcName(eventId, npcName)
                     ?: return@suspendTransaction UpdateEventResult.NotFound
                 UpdateEventResult.Success(updated)
             }
@@ -109,7 +114,7 @@ class EventRpcServiceImpl(private val clock: SeasonalClock = SeasonalClock()) : 
             val event = EventRepository.findById(eventId) ?: return@suspendTransaction UpdateEventResult.NotFound
             if (event.state == EventState.ENDED) return@suspendTransaction UpdateEventResult.AlreadyEnded
             PackageGuard.shortageAfter(event, endsAt = endsAt)?.let {
-                return@suspendTransaction UpdateEventResult.NotEnoughPackages(it.filled, it.needed)
+                return@suspendTransaction UpdateEventResult.NotEnoughPackages(it.covered, it.needed)
             }
 
             val updated = EventRepository.updateEndsAt(eventId, endsAt)

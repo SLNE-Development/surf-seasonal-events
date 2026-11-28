@@ -27,6 +27,7 @@ import java.util.*
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 /** Same serializers surf-rabbitmq uses: the surf-api defaults. */
 @OptIn(ExperimentalSerializationApi::class)
@@ -159,6 +160,7 @@ class SerializationRoundtripTest {
             UpdateEventResult.NotFound,
             UpdateEventResult.AlreadyEnded,
             UpdateEventResult.InvalidDisplayName,
+            UpdateEventResult.InvalidNpcName,
             UpdateEventResult.NotEnoughPackages(filled = 20, needed = 24),
         )
         cases.forEach { assertEquals(it, roundtrip<UpdateEventResult>(it)) }
@@ -311,8 +313,9 @@ class SerializationRoundtripTest {
 
     @Test
     fun `npc visit requirement survives roundtrip`() {
-        val gated = event.copy(npcVisitRequired = true)
+        val gated = event.copy(npcName = "weihnachtsmann")
         assertEquals(gated, roundtrip(gated))
+        assertTrue(roundtrip(gated).npcVisitRequired)
         val daily: PlayerStatus = PlayerStatus.Daily(gated, DailyToday.HIDDEN, found = 0, total = 24, npcVisitNeeded = true)
         val collect: PlayerStatus = PlayerStatus.Collect(gated, found = 0, total = 10, remainingToday = null, npcVisitNeeded = true)
         assertEquals(daily, roundtrip<PlayerStatus>(daily))
@@ -352,6 +355,7 @@ class SerializationRoundtripTest {
             RewardResult.AlreadyClaimed,
             RewardResult.NoReward,
             RewardResult.NoActiveEvent,
+            RewardResult.NotVisited,
             RewardResult.PackageUnavailable,
         )
         cases.forEach { assertEquals(it, roundtrip<RewardResult>(it)) }
@@ -372,7 +376,7 @@ class SerializationRoundtripTest {
 
     @Test
     fun `new update loot result cases survive roundtrip`() {
-        val cases: List<UpdateLootResult> = listOf(UpdateLootResult.NpcRewardNeedsFixedDay, UpdateLootResult.NpcRewardTaken)
+        val cases: List<UpdateLootResult> = listOf(UpdateLootResult.NpcRewardNeedsFixedDay, UpdateLootResult.NpcRewardTaken, UpdateLootResult.AlreadyHandedOut)
         cases.forEach { assertEquals(it, roundtrip<UpdateLootResult>(it)) }
     }
 }

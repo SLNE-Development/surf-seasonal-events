@@ -25,16 +25,22 @@ data class SeasonalEvent(
     val startedAt: @Contextual Instant?,
     val createdAt: @Contextual Instant,
     /**
-     * Whether a player has to talk to the event's NPC once before they see any block. Set while an NPC is
-     * linked to the event.
+     * Unique name of the surf-npc NPC linked to the event, or null. This is the authoritative link: only
+     * this NPC talks for the event. At most one NPC per event.
      */
-    val npcVisitRequired: Boolean = false,
+    val npcName: String? = null,
 ) {
+    /** Whether a player has to talk to the event's NPC once before they see any block: while one is linked. */
+    val npcVisitRequired: Boolean get() = npcName != null
+
     companion object {
         /** Longest allowed [name]; matches the database column. */
         const val MAX_NAME_LENGTH = 64
 
         /** Longest allowed [displayName], counted in visible characters without formatting. */
         const val MAX_DISPLAY_NAME_LENGTH = 64
+
+        /** Longest allowed [npcName]; matches the database column. */
+        const val MAX_NPC_NAME_LENGTH = 64
     }
 }

@@ -1,5 +1,6 @@
 package dev.slne.surf.seasonalevents.microservice.logic
 
+import dev.slne.surf.seasonalevents.api.event.EventMode
 import dev.slne.surf.seasonalevents.api.marker.EventMarker
 import dev.slne.surf.seasonalevents.api.marker.MarkerPosition
 import java.time.LocalDate
@@ -52,6 +53,34 @@ class DailyScheduleTest {
     fun `days without a pinned marker are not pinned`() {
         assertTrue(DailySchedule.isPinned(markers, day(23)))
         assertFalse(DailySchedule.isPinned(markers, day(24)))
+    }
+
+    @Test
+    fun `a random marker is owned while it is assigned and still in the pool`() {
+        val pool = listOf(marker(100, null), marker(101, null))
+        assertTrue(DailySchedule.ownsRandomMarker(pool, day(5), markerId = 100u, assignedId = 100u))
+        assertFalse(DailySchedule.ownsRandomMarker(pool, day(5), markerId = 101u, assignedId = 100u))
+    }
+
+    @Test
+    fun `a random marker pinned after its assignment is no longer owned`() {
+        val pinnedSince = listOf(marker(100, day(20)), marker(101, null))
+        assertFalse(DailySchedule.ownsRandomMarker(pinnedSince, day(5), markerId = 100u, assignedId = 100u))
+    }
+
+    @Test
+    fun `a pinned marker for today takes precedence over the random assignment`() {
+        val todayPinnedSince = listOf(marker(5, day(5)), marker(100, null))
+        assertFalse(DailySchedule.ownsRandomMarker(todayPinnedSince, day(5), markerId = 100u, assignedId = 100u))
+    }
+
+    @Test
+    fun `dedup keys follow the mode and the pinned day`() {
+        val pinned = marker(3, day(3))
+        val randomPool = marker(100, null)
+        assertEquals(DedupKeys.pinned(day(3)), DedupKeys.forCollection(EventMode.DAILY, day(9), pinned))
+        assertEquals(DedupKeys.random(day(9)), DedupKeys.forCollection(EventMode.DAILY, day(9), randomPool))
+        assertEquals(DedupKeys.marker(3u), DedupKeys.forCollection(EventMode.COLLECT, day(9), pinned))
     }
 
     @Test

@@ -22,6 +22,6 @@ object SeasonalEventsTable : AuditableLongIdTable("seasonal_events") {
     val endsAt = timestamp("ends_at").nullable()
     val startedAt = timestamp("started_at").nullable()
 
-    /** Whether players see blocks only after talking to the event's NPC once. */
-    val npcVisitRequired = bool("npc_visit_required").default(false)
+    /** Unique name of the linked surf-npc NPC; while set, players see blocks only after talking to it once. */
+    val npcName = varchar("npc_name", 64).nullable()
 }

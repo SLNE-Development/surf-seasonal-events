@@ -96,8 +96,11 @@ class ProgressRpcServiceImpl(
         if (DedupKeys.random(today) in keys) return null
         val pool = markers.filter { it.day == null }
 
-        // A marker pinned after it was assigned is no longer part of the pool.
-        AssignmentRepository.find(event.id, player, today)?.let { assigned -> return pool.find { it.id == assigned } }
+        AssignmentRepository.find(event.id, player, today)?.let { assigned ->
+            pool.find { it.id == assigned }?.let { return it }
+            // The assigned marker was pinned since, so it left the pool: assign a new one instead.
+            AssignmentRepository.delete(event.id, player, today)
+        }
 
         if (pool.isEmpty() || candidates(event, player, today).isEmpty()) return null
 
@@ -145,7 +148,7 @@ class ProgressRpcServiceImpl(
                     markerId = markerId,
                     packageId = packageId,
                     day = check.today,
-                    dedupKey = CollectionRepository.dedupKey(check.event.mode, check.today, check.marker),
+                    dedupKey = DedupKeys.forCollection(check.event.mode, check.today, check.marker),
                 )
                 if (booked) CollectResult.Success(lootPackage) else CollectResult.AlreadyCollected
             }
@@ -167,7 +170,7 @@ class ProgressRpcServiceImpl(
                     today = StatusRules.dailyToday(
                         collectedToday = if (pinnedToday) DedupKeys.pinned(today) in keys else DedupKeys.random(today) in keys,
                         hasBlock = pinnedToday || AssignmentRepository.find(event.id, player, today)
-                            ?.let { assigned -> markers.any { it.id == assigned && it.day == null } } == true,
+                            ?.let { assigned -> DailySchedule.ownsRandomMarker(markers, today, assigned, assigned) } == true,
                         openPackages = open,
                     ),
                     found = found,
@@ -198,9 +201,8 @@ class ProgressRpcServiceImpl(
         }
     }
 
-    override suspend fun visitNpc(player: UUID, eventName: String): NpcStatus = suspendTransaction {
-        val event = events.getActiveEvent()?.takeIf { it.name == eventName }
-            ?: return@suspendTransaction NpcStatus.NoActiveEvent
+    override suspend fun visitNpc(player: UUID, eventId: ULong, npcName: String): NpcStatus = suspendTransaction {
+        val event = activeEventOfNpc(eventId, npcName) ?: return@suspendTransaction NpcStatus.NoActiveEvent
         val today = clock.today()
         val firstVisit = NpcVisitRepository.recordVisit(event.id, player, clock.now())
         val progress = npcProgress(event, player)
@@ -216,8 +218,15 @@ class ProgressRpcServiceImpl(
         )
     }
 
-    override suspend fun previewReward(player: UUID): RewardResult = suspendTransaction {
-        when (val check = checkReward(player)) {
+    /**
+     * The active event if it is [eventId] and [npcName] is its linked NPC. The event's NPC name is the
+     * authority: an NPC whose link outlived a relink or the event's deletion is not treated as the event's NPC.
+     */
+    private suspend fun activeEventOfNpc(eventId: ULong, npcName: String): SeasonalEvent? =
+        events.getActiveEvent()?.takeIf { it.id == eventId && it.npcName == npcName }
+
+    override suspend fun previewReward(player: UUID, eventId: ULong): RewardResult = suspendTransaction {
+        when (val check = checkReward(player, eventId)) {
             is RewardCheck.Denied -> check.result
             is RewardCheck.Allowed -> LootRepository.findById(check.reward.id)
                 ?.takeIf { it.items.isNotEmpty() }
@@ -226,9 +235,9 @@ class ProgressRpcServiceImpl(
         }
     }
 
-    override suspend fun claimReward(player: UUID, packageId: ULong): RewardResult = lockFor(player).withLock {
+    override suspend fun claimReward(player: UUID, eventId: ULong, packageId: ULong): RewardResult = lockFor(player).withLock {
         suspendTransaction {
-            val check = when (val check = checkReward(player)) {
+            val check = when (val check = checkReward(player, eventId)) {
                 is RewardCheck.Denied -> return@suspendTransaction check.result
                 is RewardCheck.Allowed -> check
             }
@@ -274,17 +283,27 @@ class ProgressRpcServiceImpl(
         data class Allowed(val event: SeasonalEvent, val today: LocalDate, val reward: PackageRef) : RewardCheck
     }
 
-    /** Runs every rule shared by [previewReward] and [claimReward]. */
-    private suspend fun checkReward(player: UUID): RewardCheck {
-        val event = events.getActiveEvent() ?: return RewardCheck.Denied(RewardResult.NoActiveEvent)
+    /**
+     * Runs every rule shared by [previewReward] and [claimReward]. [eventId] is the event of the dialog the
+     * claim comes from; a dialog that outlived its event cannot claim for the next one.
+     */
+    private suspend fun checkReward(player: UUID, eventId: ULong): RewardCheck {
+        val event = events.getActiveEvent()?.takeIf { it.id == eventId }
+            ?: return RewardCheck.Denied(RewardResult.NoActiveEvent)
+        if (mustVisitNpcFirst(event, player)) return RewardCheck.Denied(RewardResult.NotVisited)
         val today = clock.today()
         val progress = npcProgress(event, player)
-        return when (val reward = progress.reward(today)) {
-            NpcReward.None -> RewardCheck.Denied(RewardResult.NoReward)
-            NpcReward.Claimed -> RewardCheck.Denied(RewardResult.AlreadyClaimed)
-            is NpcReward.Waiting -> RewardCheck.Denied(RewardResult.NotYet(reward.day, reward.missing))
-            NpcReward.Ready -> RewardCheck.Allowed(event, today, checkNotNull(progress.reward))
+        val reward = when (val state = progress.reward(today)) {
+            NpcReward.None -> return RewardCheck.Denied(RewardResult.NoReward)
+            NpcReward.Claimed -> return RewardCheck.Denied(RewardResult.AlreadyClaimed)
+            is NpcReward.Waiting -> return RewardCheck.Denied(RewardResult.NotYet(state.day, state.missing))
+            NpcReward.Ready -> checkNotNull(progress.reward)
         }
+        // Each package reaches a player at most once, also if it was found on the map before it became the reward.
+        if (reward.id in CollectionRepository.receivedPackageIds(event.id, player)) {
+            return RewardCheck.Denied(RewardResult.AlreadyClaimed)
+        }
+        return RewardCheck.Allowed(event, today, reward)
     }
 
     private sealed interface Check {
@@ -315,7 +334,13 @@ class ProgressRpcServiceImpl(
                     ownsMarker = !pinnedDay.isAfter(today)
                     alreadyCollected = DedupKeys.pinned(pinnedDay) in keys
                 } else {
-                    ownsMarker = marker != null && AssignmentRepository.find(event.id, player, today) == markerId
+                    // Same rules as the player's view, so a block that is not shown cannot be collected.
+                    ownsMarker = marker != null && DailySchedule.ownsRandomMarker(
+                        markers = MarkerRepository.findByEvent(event.id),
+                        today = today,
+                        markerId = markerId,
+                        assignedId = AssignmentRepository.find(event.id, player, today),
+                    )
                     alreadyCollected = DedupKeys.random(today) in keys
                 }
             }

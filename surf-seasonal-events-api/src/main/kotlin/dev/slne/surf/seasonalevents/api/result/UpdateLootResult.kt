@@ -41,6 +41,10 @@ sealed interface UpdateLootResult {
     @Serializable
     data object NpcRewardTaken : UpdateLootResult
 
+    /** Players already found this package on the map, so it cannot become the NPC reward anymore. */
+    @Serializable
+    data object AlreadyHandedOut : UpdateLootResult
+
     /** Someone else saved the package since it was opened; nothing was changed. */
     @Serializable
     data object Conflict : UpdateLootResult

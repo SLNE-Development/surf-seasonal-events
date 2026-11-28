@@ -87,8 +87,9 @@ Every subcommand also requires the base permission. Times are Europe/Berlin.
    found all blocks of the days before.
 4. Create the NPC with surf-npc and link it: `npc christmas-2026 <npc name>`. Clicking it shows a dialog
    that depends on the date and the player's progress (introduction on the first talk, today's gift,
-   older gifts to catch up, the reward, a farewell). While an NPC is linked, players see the blocks only
-   after talking to it once; `npc christmas-2026 <npc name> remove` lifts that again.
+   older gifts to catch up, the reward, a farewell). An event has at most one NPC; linking another one
+   replaces it. While an NPC is linked, players see the blocks only after talking to it once;
+   `npc christmas-2026 <npc name> remove` lifts that again. `start` warns if the linked NPC is missing.
 5. `start christmas-2026 2026-12-31T23:59`. Each find shows the progress for a few seconds in surf-hud if
    it runs, otherwise in the action bar.
 

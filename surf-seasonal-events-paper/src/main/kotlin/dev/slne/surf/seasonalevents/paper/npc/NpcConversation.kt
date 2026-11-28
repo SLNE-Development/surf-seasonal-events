@@ -10,6 +10,7 @@ import dev.slne.surf.seasonalevents.core.client.rpc.progressRpc
 import dev.slne.surf.seasonalevents.core.client.rpc.rpcCall
 import dev.slne.surf.seasonalevents.paper.collect.CollectService
 import dev.slne.surf.seasonalevents.paper.collect.InventorySpace
+import dev.slne.surf.seasonalevents.paper.collect.PlayerClaims
 import dev.slne.surf.seasonalevents.paper.command.errorMessage
 import dev.slne.surf.seasonalevents.paper.command.inventoryFullMessage
 import dev.slne.surf.seasonalevents.paper.command.unavailableMessage
@@ -23,8 +24,6 @@ import org.bukkit.Particle
 import org.bukkit.Sound
 import org.bukkit.entity.Player
 import java.time.LocalDate
-import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * A talk with an event NPC: loads what the NPC knows about the player, shows the matching dialog and
@@ -32,12 +31,9 @@ import java.util.concurrent.ConcurrentHashMap
  */
 internal object NpcConversation {
 
-    /** Players with a reward claim in progress; further clicks are ignored until it is done. */
-    private val claiming = ConcurrentHashMap.newKeySet<UUID>()
-
-    /** Talks to [player] as the NPC of event [eventName]; can be called from any thread. */
-    suspend fun talk(player: Player, eventName: String, speaker: Component) {
-        val status = when (val outcome = rpcCall { progressRpc.visitNpc(player.uniqueId, eventName) }) {
+    /** Talks to [player] as NPC [npcName] of event [eventId]; can be called from any thread. */
+    suspend fun talk(player: Player, eventId: ULong, npcName: String, speaker: Component) {
+        val status = when (val outcome = rpcCall { progressRpc.visitNpc(player.uniqueId, eventId, npcName) }) {
             is RpcOutcome.Unavailable -> return player.sendMessage(unavailableMessage())
             is RpcOutcome.Ok -> outcome.value
         }
@@ -53,18 +49,15 @@ internal object NpcConversation {
         if (status is NpcStatus.Active && status.firstVisit) ViewService.reload(player)
     }
 
-    /** Previews the reward, checks the inventory, books it and hands it over; can be called from any thread. */
-    suspend fun claimReward(player: Player, speaker: Component) {
-        if (!claiming.add(player.uniqueId)) return
-        try {
-            claim(player, speaker)
-        } finally {
-            claiming.remove(player.uniqueId)
-        }
-    }
+    /**
+     * Previews the reward of event [eventId], checks the inventory, books it and hands it over; can be called
+     * from any thread. [eventId] is the event of the dialog, so an old dialog cannot claim for a newer event.
+     */
+    suspend fun claimReward(player: Player, eventId: ULong, speaker: Component) =
+        PlayerClaims.exclusive(player.uniqueId) { claim(player, eventId, speaker) }
 
-    private suspend fun claim(player: Player, speaker: Component) {
-        val preview = when (val outcome = rpcCall { progressRpc.previewReward(player.uniqueId) }) {
+    private suspend fun claim(player: Player, eventId: ULong, speaker: Component) {
+        val preview = when (val outcome = rpcCall { progressRpc.previewReward(player.uniqueId, eventId) }) {
             is RpcOutcome.Unavailable -> return player.sendMessage(unavailableMessage())
             is RpcOutcome.Ok -> outcome.value as? RewardResult.Preview ?: return player.sendMessage(outcome.value.message())
         }
@@ -76,7 +69,7 @@ internal object NpcConversation {
         }
         if (!fits) return player.sendMessage(inventoryFullMessage())
 
-        val result = when (val outcome = rpcCall { progressRpc.claimReward(player.uniqueId, preview.packageId) }) {
+        val result = when (val outcome = rpcCall { progressRpc.claimReward(player.uniqueId, eventId, preview.packageId) }) {
             is RpcOutcome.Unavailable -> return player.sendMessage(unavailableMessage())
             is RpcOutcome.Ok -> outcome.value
         }
@@ -101,7 +94,8 @@ internal object NpcConversation {
         is RewardResult.NotYet -> errorMessage("Das Geschenk gibt es erst, wenn alle anderen Geschenke gefunden sind.")
         RewardResult.AlreadyClaimed -> errorMessage("Dieses Geschenk hast du schon bekommen.")
         RewardResult.NoReward -> errorMessage("Für dieses Event gibt es kein Geschenk vom NPC.")
-        RewardResult.NoActiveEvent -> errorMessage("Gerade läuft kein Event.")
+        RewardResult.NoActiveEvent -> errorMessage("Das Event dieses Geschenks läuft nicht mehr.")
+        RewardResult.NotVisited -> errorMessage("Sprich zuerst mit dem Event-NPC.")
         RewardResult.PackageUnavailable -> errorMessage("Das Geschenk hat sich gerade geändert. Sprich den NPC noch einmal an.")
     }
 }

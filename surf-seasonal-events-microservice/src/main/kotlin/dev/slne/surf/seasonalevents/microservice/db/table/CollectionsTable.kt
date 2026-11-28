@@ -20,8 +20,9 @@ object CollectionsTable : AuditableLongIdTable("collections") {
     val day = date("day")
 
     /**
-     * Prevents collecting twice: `D:<day>` in a `DAILY` event (once per day),
-     * `M:<markerId>` in a `COLLECT` event (once per marker).
+     * Prevents collecting twice; the formats are built by `DedupKeys`: `S:<day>` per pinned day and `D:<day>`
+     * per day of the random pool in a `DAILY` event, `M:<markerId>` per marker in a `COLLECT` event, `R` for
+     * the NPC reward.
      */
     val dedupKey = varchar("dedup_key", 32)
 

@@ -50,7 +50,7 @@ internal object NpcDialogs {
             ),
         ) {
             label { success("Geschenk annehmen") }
-            action { playerCallback { player -> plugin.launch { NpcConversation.claimReward(player, speaker) } } }
+            action { playerCallback { player -> plugin.launch { NpcConversation.claimReward(player, status.event.id, speaker) } } }
         }
 
         NpcReward.Claimed -> farewell(speaker)

@@ -6,6 +6,7 @@ import dev.slne.surf.seasonalevents.api.loot.LootPackage
 import dev.slne.surf.seasonalevents.api.result.DeleteLootResult
 import dev.slne.surf.seasonalevents.api.result.UpdateLootResult
 import dev.slne.surf.seasonalevents.core.rpc.LootRpcService
+import dev.slne.surf.seasonalevents.microservice.db.repository.CollectionRepository
 import dev.slne.surf.seasonalevents.microservice.db.repository.EventRepository
 import dev.slne.surf.seasonalevents.microservice.db.repository.LootRepository
 import dev.slne.surf.seasonalevents.microservice.logic.LootRules
@@ -34,11 +35,9 @@ object LootRpcServiceImpl : LootRpcService {
                 val current = LootRepository.findById(packageId) ?: return@suspendTransaction UpdateLootResult.NotFound
                 val event = EventRepository.findById(current.eventId) ?: return@suspendTransaction UpdateLootResult.NotFound
                 LootRules.checkSave(event, current.items, expectedItems)?.let { return@suspendTransaction it }
-                // The NPC reward is not part of the requirement, so emptying it never causes a shortage.
-                val emptiesPackage = current.items.isNotEmpty() && items.isEmpty() && !current.npcReward
-                if (emptiesPackage) {
-                    PackageGuard.shortageAfter(event, removedPackages = 1)?.let {
-                        return@suspendTransaction UpdateLootResult.NotEnoughPackages(it.filled, it.needed)
+                if (current.items.isNotEmpty() && items.isEmpty()) {
+                    PackageGuard.shortageAfter(event, packages = PackageGuard.without(packageId))?.let {
+                        return@suspendTransaction UpdateLootResult.NotEnoughPackages(it.covered, it.needed)
                     }
                 }
 
@@ -59,6 +58,10 @@ object LootRpcServiceImpl : LootRpcService {
                 return@suspendTransaction UpdateLootResult.FixedDayTaken
             }
             if (day == null && lootPackage.npcReward) return@suspendTransaction UpdateLootResult.NpcRewardNeedsFixedDay
+            // A fixed day decides which block a package can serve, so moving it can leave a day without one.
+            PackageGuard.shortageAfter(event, packages = PackageGuard.changed(packageId) { it.copy(fixedDay = day) })?.let {
+                return@suspendTransaction UpdateLootResult.NotEnoughPackages(it.covered, it.needed)
+            }
 
             val updated = LootRepository.updateFixedDay(packageId, day)
                 ?: return@suspendTransaction UpdateLootResult.NotFound
@@ -74,16 +77,17 @@ object LootRpcServiceImpl : LootRpcService {
                 LootRules.checkChange(event)?.let { return@suspendTransaction it }
                 if (event.mode != EventMode.DAILY) return@suspendTransaction UpdateLootResult.NotDailyEvent
 
-                if (npcReward) {
+                if (npcReward && !lootPackage.npcReward) {
                     if (lootPackage.fixedDay == null) return@suspendTransaction UpdateLootResult.NpcRewardNeedsFixedDay
                     if (LootRepository.isNpcRewardTaken(event.id, exceptId = packageId)) {
                         return@suspendTransaction UpdateLootResult.NpcRewardTaken
                     }
-                    // A filled package that becomes the reward no longer counts for the map's blocks.
-                    if (!lootPackage.npcReward && lootPackage.items.isNotEmpty()) {
-                        PackageGuard.shortageAfter(event, removedPackages = 1)?.let {
-                            return@suspendTransaction UpdateLootResult.NotEnoughPackages(it.filled, it.needed)
-                        }
+                    // Players who found it on the map would otherwise get the same package again from the NPC.
+                    if (CollectionRepository.wasHandedOut(packageId)) {
+                        return@suspendTransaction UpdateLootResult.AlreadyHandedOut
+                    }
+                    PackageGuard.shortageAfter(event, packages = PackageGuard.changed(packageId) { it.copy(npcReward = true) })?.let {
+                        return@suspendTransaction UpdateLootResult.NotEnoughPackages(it.covered, it.needed)
                     }
                 }
 
@@ -98,10 +102,8 @@ object LootRpcServiceImpl : LootRpcService {
             val lootPackage = LootRepository.findById(packageId) ?: return@suspendTransaction DeleteLootResult.NotFound
             val event = EventRepository.findById(lootPackage.eventId) ?: return@suspendTransaction DeleteLootResult.NotFound
             if (LootRules.checkChange(event) != null) return@suspendTransaction DeleteLootResult.EventEnded
-            if (lootPackage.items.isNotEmpty() && !lootPackage.npcReward) {
-                PackageGuard.shortageAfter(event, removedPackages = 1)?.let {
-                    return@suspendTransaction DeleteLootResult.NotEnoughPackages(it.filled, it.needed)
-                }
+            PackageGuard.shortageAfter(event, packages = PackageGuard.without(packageId))?.let {
+                return@suspendTransaction DeleteLootResult.NotEnoughPackages(it.covered, it.needed)
             }
 
             if (LootRepository.delete(packageId)) DeleteLootResult.Success else DeleteLootResult.NotFound

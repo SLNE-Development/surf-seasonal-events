@@ -94,20 +94,6 @@ object LootRepository {
         findById(id)
     }
 
-    /**
-     * Number of packages of the event that have items and can be found on the map; empty packages are
-     * never handed out, and the NPC reward is handed out by the NPC only.
-     */
-    suspend fun countFilled(eventId: ULong): Int = suspendTransaction {
-        LootPackagesTable.selectAll()
-            .where {
-                (LootPackagesTable.eventId eq eventId) and
-                    (itemsLength greater 0) and
-                    (LootPackagesTable.npcReward eq false)
-            }
-            .count()
-            .toInt()
-    }
 
     /** Returns whether a package of [eventId] other than [exceptId] already has [day] as its fixed day. */
     suspend fun isFixedDayTaken(eventId: ULong, day: LocalDate, exceptId: ULong): Boolean = suspendTransaction {

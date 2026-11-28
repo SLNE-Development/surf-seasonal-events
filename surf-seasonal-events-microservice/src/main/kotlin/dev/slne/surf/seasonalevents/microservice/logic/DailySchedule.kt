@@ -22,6 +22,13 @@ object DailySchedule {
     /** Whether a marker is pinned to [day]; then nobody gets a random-pool marker that day. */
     fun isPinned(markers: List<EventMarker>, day: LocalDate): Boolean = markers.any { it.day == day }
 
+    /**
+     * Whether random-pool marker [markerId] is the player's block today: it is their assignment
+     * ([assignedId]), still part of the pool and today has no pinned marker, which takes precedence.
+     */
+    fun ownsRandomMarker(markers: List<EventMarker>, today: LocalDate, markerId: ULong, assignedId: ULong?): Boolean =
+        assignedId == markerId && !isPinned(markers, today) && markers.any { it.id == markerId && it.day == null }
+
     /** Pinned days before [today] that are not in [foundDays]: what the player can still catch up. */
     fun openEarlier(pinnedDays: Set<LocalDate>, today: LocalDate, foundDays: Set<LocalDate>): Int =
         pinnedDays.count { it.isBefore(today) && it !in foundDays }

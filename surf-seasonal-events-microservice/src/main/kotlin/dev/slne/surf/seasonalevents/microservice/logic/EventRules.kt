@@ -2,6 +2,7 @@ package dev.slne.surf.seasonalevents.microservice.logic
 
 import dev.slne.surf.seasonalevents.api.event.EventState
 import dev.slne.surf.seasonalevents.api.event.SeasonalEvent
+import dev.slne.surf.seasonalevents.api.loot.PackageCoverage
 import dev.slne.surf.seasonalevents.api.result.CreateEventResult
 import dev.slne.surf.seasonalevents.api.result.DeleteEventResult
 import dev.slne.surf.seasonalevents.api.result.StartEventResult
@@ -35,24 +36,24 @@ object EventRules {
 
     /**
      * Checks whether [target] may start. Only one event can be active at a time, and an event needs at
-     * least one marker and enough filled packages (see [PackageRequirement]).
+     * least one marker and packages that cover every block it hands out (see [PackageRequirement]).
      *
-     * @param packageCount number of packages with at least one item
-     * @param requiredPackages from [PackageRequirement.required]; null if one package is enough
+     * @param packageCount number of packages with at least one item that blocks can hand out
+     * @param coverage from [PackageRequirement.coverage]; null if one package is enough
      */
     fun checkStart(
         target: SeasonalEvent,
         active: SeasonalEvent?,
         markerCount: Int,
         packageCount: Int,
-        requiredPackages: Int?,
+        coverage: PackageCoverage.Result?,
     ): StartEventResult? {
         if (target.state == EventState.ENDED) return StartEventResult.AlreadyEnded
         if (active != null) return StartEventResult.AnotherEventActive(active.name)
         if (markerCount == 0) return StartEventResult.NoMarkers
         if (packageCount == 0) return StartEventResult.NoPackages
-        PackageRequirement.check(packageCount, requiredPackages)?.let {
-            return StartEventResult.NotEnoughPackages(filled = it.filled, needed = it.needed)
+        if (coverage != null && coverage.isShort) {
+            return StartEventResult.NotEnoughPackages(filled = coverage.covered, needed = coverage.needed)
         }
         return null
     }

@@ -2,6 +2,7 @@ package dev.slne.surf.seasonalevents.microservice.db.repository
 
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.core.and
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.core.eq
+import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.deleteWhere
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.insertIgnore
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.selectAll
 import dev.slne.surf.database.libs.org.jetbrains.exposed.v1.r2dbc.transactions.suspendTransaction
@@ -24,6 +25,17 @@ object AssignmentRepository {
             .singleOrNull()
             ?.get(DailyAssignmentsTable.markerId)
             ?.value
+    }
+
+    /** Removes the assignment of [player] for [day], e.g. because its marker left the random pool. */
+    suspend fun delete(eventId: ULong, player: UUID, day: LocalDate) {
+        suspendTransaction {
+            DailyAssignmentsTable.deleteWhere {
+                (DailyAssignmentsTable.eventId eq eventId) and
+                    (DailyAssignmentsTable.player eq player) and
+                    (DailyAssignmentsTable.day eq day)
+            }
+        }
     }
 
     /**

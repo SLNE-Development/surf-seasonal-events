@@ -12,6 +12,7 @@ import dev.slne.surf.seasonalevents.api.SeasonalTime
 import dev.slne.surf.seasonalevents.api.event.EventMode
 import dev.slne.surf.seasonalevents.api.event.SeasonalEvent
 import dev.slne.surf.seasonalevents.api.loot.LootPackage
+import dev.slne.surf.seasonalevents.api.loot.PackageCoverage
 import dev.slne.surf.seasonalevents.api.marker.EventMarker
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.Material
@@ -96,12 +97,9 @@ fun npcRewardIcon(lootPackage: LootPackage): ItemStack =
  * one package per day in `DAILY`, one per found block in `COLLECT`, each at most once per player.
  */
 fun lootInfoIcon(event: SeasonalEvent, packages: List<LootPackage>, markers: List<EventMarker>): ItemStack {
-    // The NPC reward is handed out by the NPC, not for a block.
-    val filled = packages.count { it.items.isNotEmpty() && !it.npcReward }
-    val needed = when (event.mode) {
-        EventMode.DAILY -> dailyDays(event, markers)
-        EventMode.COLLECT -> markers.size
-    }
+    val coverage = coverage(event, packages, markers)
+    val filled = coverage?.covered ?: packages.count { it.items.isNotEmpty() && !it.npcReward }
+    val needed = coverage?.needed
     /** Packages still to fill; null if there are enough. */
     val missing = needed?.minus(filled)?.takeIf { it > 0 }
 
@@ -127,7 +125,10 @@ fun lootInfoIcon(event: SeasonalEvent, packages: List<LootPackage>, markers: Lis
             }
             line { info("Jedes Paket bekommt ein Spieler höchstens einmal.") }
             emptyLine()
-            line { variableKey("Befüllte Pakete: "); variableValue(filled.toString()) }
+            line { variableKey("Nutzbare Pakete: "); variableValue(filled.toString()) }
+            if (event.mode == EventMode.DAILY) {
+                line { spacer("Feste Pakete zählen nur an Tagen mit Block".toSmallCaps()) }
+            }
             line {
                 variableKey("Benötigt: ")
                 variableValue(
@@ -144,7 +145,7 @@ fun lootInfoIcon(event: SeasonalEvent, packages: List<LootPackage>, markers: Lis
                 line {
                     warning(
                         when (event.mode) {
-                            EventMode.DAILY -> "Noch $missing befüllen oder ein früheres Ende wählen."
+                            EventMode.DAILY -> "Noch $missing befüllen, feste Tage prüfen oder ein früheres Ende wählen."
                             EventMode.COLLECT -> "Noch $missing befüllen oder Blöcke entmarkieren."
                         },
                     )
@@ -156,19 +157,20 @@ fun lootInfoIcon(event: SeasonalEvent, packages: List<LootPackage>, markers: Lis
 }
 
 /**
- * Days that hand out a block, the same rule as the microservice's `PackageRequirement`: every day from the
- * start (or today) until the end while the random pool has markers, otherwise only the pinned days up to the
- * end. Null without an end date.
+ * The same [PackageCoverage] the microservice checks, for the start (or today) of [event]; null if a `DAILY`
+ * event with a random pool has no end date yet. The NPC reward is handed out by the NPC, not for a block.
  */
-private fun dailyDays(event: SeasonalEvent, markers: List<EventMarker>): Int? {
-    val end = event.endsAt?.atZone(SeasonalTime.ZONE)?.toLocalDate() ?: return null
-    val start = (event.startedAt ?: Instant.now()).atZone(SeasonalTime.ZONE).toLocalDate()
-    val pinned = markers.mapNotNullTo(HashSet()) { it.day }
-    val hasRandomPool = pinned.isEmpty() || markers.size > pinned.size
-    val eventDays = if (hasRandomPool) {
-        generateSequence(start) { it.plusDays(1) }.takeWhile { !it.isAfter(end) }.toSet()
-    } else {
-        emptySet()
+private fun coverage(event: SeasonalEvent, packages: List<LootPackage>, markers: List<EventMarker>): PackageCoverage.Result? {
+    val forBlocks = packages.filter { it.items.isNotEmpty() && !it.npcReward }
+    return when (event.mode) {
+        EventMode.COLLECT -> PackageCoverage.collect(markers.size, forBlocks.size)
+        EventMode.DAILY -> PackageCoverage.daily(
+            startDay = (event.startedAt ?: Instant.now()).atZone(SeasonalTime.ZONE).toLocalDate(),
+            endDay = event.endsAt?.atZone(SeasonalTime.ZONE)?.toLocalDate(),
+            markerCount = markers.size,
+            pinnedDays = markers.mapNotNullTo(HashSet()) { it.day },
+            fixedDays = forBlocks.mapNotNull { it.fixedDay },
+            randomPackages = forBlocks.count { it.fixedDay == null },
+        )
     }
-    return (eventDays + pinned.filter { !it.isAfter(end) }).size
 }

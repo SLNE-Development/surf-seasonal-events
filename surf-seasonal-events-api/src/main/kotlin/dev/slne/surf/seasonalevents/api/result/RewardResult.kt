@@ -33,9 +33,13 @@ sealed interface RewardResult {
     @Serializable
     data object NoReward : RewardResult
 
-    /** No event is currently active. */
+    /** No event is currently active, or it is not the event the claim was made for. */
     @Serializable
     data object NoActiveEvent : RewardResult
+
+    /** The player has not talked to the event's NPC yet, which the event requires. */
+    @Serializable
+    data object NotVisited : RewardResult
 
     /** The previewed package changed meanwhile; preview again. */
     @Serializable

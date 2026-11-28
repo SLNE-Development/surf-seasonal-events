@@ -47,8 +47,13 @@ interface MarkerRpcService {
      * Pins a marker of a `DAILY` event to [day], making it that day's hiding spot for every player, or
      * releases it into the random pool with null.
      *
+     * Allowed while the event runs, so mistakes can be fixed. Progress belongs to the calendar day, not to the
+     * block: a day a player found stays found, and a marker moved to another day is that day's hiding spot,
+     * found or not. A random assignment whose marker gets pinned is replaced on the player's next view.
+     *
      * @return [MarkerDayResult.DayTaken] if another marker of the event is pinned to [day],
-     * [MarkerDayResult.NotDailyEvent] for a `COLLECT` event, [MarkerDayResult.EventEnded] if it has ended
+     * [MarkerDayResult.NotDailyEvent] for a `COLLECT` event, [MarkerDayResult.EventEnded] if it has ended,
+     * [MarkerDayResult.NotEnoughPackages] if a day with a block would be left without a package
      */
     suspend fun setDay(markerId: ULong, day: LocalDate?): MarkerDayResult
 

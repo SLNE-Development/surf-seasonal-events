@@ -39,7 +39,7 @@ object MarkerRpcServiceImpl : MarkerRpcService {
                 positionTaken = MarkerRepository.findByPosition(position) != null,
             )?.let { return@suspendTransaction it }
             PackageGuard.shortageAfter(event, addedMarkers = 1)?.let {
-                return@suspendTransaction MarkResult.NotEnoughPackages(it.filled, it.needed)
+                return@suspendTransaction MarkResult.NotEnoughPackages(it.covered, it.needed)
             }
 
             val marker = MarkerRepository.insert(eventId, position, blockData, skullTexture, markedBy)
@@ -73,7 +73,7 @@ object MarkerRpcServiceImpl : MarkerRpcService {
             val pinnedAfter = MarkerRepository.findByEvent(event.id)
                 .mapNotNullTo(HashSet()) { if (it.id == markerId) day else it.day }
             PackageGuard.shortageAfter(event, pinnedDays = pinnedAfter)?.let {
-                return@suspendTransaction MarkerDayResult.NotEnoughPackages(it.filled, it.needed)
+                return@suspendTransaction MarkerDayResult.NotEnoughPackages(it.covered, it.needed)
             }
 
             val updated = MarkerRepository.updateDay(markerId, day) ?: return@suspendTransaction MarkerDayResult.NotFound

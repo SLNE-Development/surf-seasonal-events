@@ -27,7 +27,9 @@ import dev.slne.surf.seasonalevents.core.client.rpc.progressRpc
 import dev.slne.surf.seasonalevents.core.client.rpc.rpcCall
 import dev.slne.surf.seasonalevents.paper.command.argument.SeasonalEventArgument
 import dev.slne.surf.seasonalevents.paper.gui.openLootOverview
+import dev.slne.surf.seasonalevents.api.result.StartEventResult
 import dev.slne.surf.seasonalevents.paper.npc.EventNpcs
+import dev.slne.surf.seasonalevents.paper.npc.NpcLinks
 import dev.slne.surf.seasonalevents.paper.npc.npcSubcommand
 import dev.slne.surf.seasonalevents.paper.plugin
 import dev.slne.surf.seasonalevents.paper.render.ViewService
@@ -214,8 +216,21 @@ private suspend fun Audience.create(args: CommandArguments, dailyLimit: Int) {
 }
 
 private suspend fun Audience.start(event: SeasonalEvent, endsAt: Instant?) {
-    reply({ eventRpc.start(event.id, endsAt) }) { it.message(event) }
+    val outcome = rpcCall { eventRpc.start(event.id, endsAt) }
+    if (outcome !is RpcOutcome.Ok) return sendMessage(unavailableMessage())
+    sendMessage(outcome.value.message(event))
     ViewService.reloadAll()
+
+    // While an NPC is required, nobody sees a block without it, so a missing NPC must not go unnoticed.
+    val started = (outcome.value as? StartEventResult.Success)?.event ?: return
+    if (!started.npcVisitRequired) return
+    if (!EventNpcs.enabled) {
+        return sendMessage(buildText {
+            appendWarningPrefix()
+            warning("Das Event braucht den NPC ${started.npcName}, aber surf-npc läuft nicht. Ohne ihn sieht niemand die Blöcke.")
+        })
+    }
+    NpcLinks.missingNpcWarning(started)?.let(::sendMessage)
 }
 
 private suspend fun Audience.confirmStop() {

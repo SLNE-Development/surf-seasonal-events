@@ -105,6 +105,7 @@ fun eventInfoMessage(event: SeasonalEvent): Component {
             line("Erstellt", event.createdAt.formatted()),
             line("Gestartet", event.startedAt.formatted()),
             line("Ende", event.endsAt.formatted()),
+            line("NPC", event.npcName ?: "keiner"),
         ),
     )
 }
@@ -131,12 +132,13 @@ internal fun packageShortageMessage(
     appendErrorPrefix()
     error("$problem ")
     variableValue("$filled/$needed")
-    error(" Pakete befüllt.")
+    error(" nutzbare Pakete.")
     appendNewErrorPrefixedLine {
         error(
             when (mode) {
                 EventMode.COLLECT -> "Jeder gefundene Block gibt ein eigenes Paket, also braucht es eins pro Block."
-                EventMode.DAILY -> "Jeder Event-Tag gibt ein eigenes Paket, also braucht es eins pro Tag bis zum Ende."
+                EventMode.DAILY -> "Jeder Tag mit Block gibt ein eigenes Paket. Ein Paket mit festem Tag zählt nur, " +
+                    "wenn es an seinem Tag einen Block gibt."
                 null -> "Jeder Spieler bekommt jedes Paket nur einmal, deshalb braucht das Event so viele."
             },
         )
@@ -156,7 +158,7 @@ fun StartEventResult.message(event: SeasonalEvent): Component = when (this) {
         error(
             when (event.mode) {
                 EventMode.COLLECT -> " oder entmarkiere Blöcke."
-                EventMode.DAILY -> " oder wähle ein früheres Ende."
+                EventMode.DAILY -> ", prüfe die festen Tage oder wähle ein früheres Ende."
             },
         )
     }
@@ -181,6 +183,8 @@ fun UpdateEventResult.message(): Component = when (this) {
     UpdateEventResult.InvalidDisplayName -> errorMessage(
         "Der Anzeigename darf nicht leer und ohne Formatierung höchstens ${SeasonalEvent.MAX_DISPLAY_NAME_LENGTH} Zeichen lang sein.",
     )
+    UpdateEventResult.InvalidNpcName ->
+        errorMessage("Der NPC-Name darf höchstens ${SeasonalEvent.MAX_NPC_NAME_LENGTH} Zeichen lang sein.")
 }
 
 fun StopEventResult.message(): Component = when (this) {

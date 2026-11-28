@@ -19,15 +19,12 @@ import dev.slne.surf.seasonalevents.paper.render.ViewService
 import io.papermc.paper.dialog.Dialog
 import kotlinx.coroutines.withContext
 import org.bukkit.entity.Player
+import dev.slne.surf.seasonalevents.paper.time.DayInput
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
 
 // Dialog of the marker tool to pin a marker to a day. Built per show, because its click callback works once.
 
 private const val DAY_KEY = "day"
-
-private val inputDayFormat = DateTimeFormatter.ofPattern("dd.MM.uuuu")
 
 /** Asks for the day [marker] is the hiding spot for (`dd.MM.yyyy`, empty for the random pool). */
 fun markerDayDialog(marker: EventMarker, error: String? = null): Dialog = dialog {
@@ -57,7 +54,7 @@ fun markerDayDialog(marker: EventMarker, error: String? = null): Dialog = dialog
                         val day = if (input.isEmpty()) {
                             null
                         } else {
-                            parseDay(input) ?: return@customPlayerClick player.showDialog(
+                            DayInput.parse(input) ?: return@customPlayerClick player.showDialog(
                                 markerDayDialog(marker, "„$input“ ist kein gültiges Datum."),
                             )
                         }
@@ -68,12 +65,6 @@ fun markerDayDialog(marker: EventMarker, error: String? = null): Dialog = dialog
             no { label { text("Abbrechen") } }
         }
     }
-}
-
-private fun parseDay(input: String): LocalDate? = try {
-    LocalDate.parse(input, inputDayFormat)
-} catch (_: DateTimeParseException) {
-    null
 }
 
 private suspend fun setDay(player: Player, marker: EventMarker, day: LocalDate?) {

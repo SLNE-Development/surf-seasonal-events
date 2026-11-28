@@ -21,7 +21,12 @@ fun UpdateLootResult.message(): Component = when (this) {
     UpdateLootResult.FixedDayTaken -> errorMessage("An diesem Tag gibt es schon ein festes Paket in diesem Event.")
     UpdateLootResult.NotDailyEvent -> errorMessage("Feste Tage gibt es nur in DAILY-Events.")
     UpdateLootResult.EventEnded -> eventEnded
-    is UpdateLootResult.NotEnoughPackages -> shortageAfterRemoval(filled, needed, "Leeren")
+    // Also refused for a fixed day or NPC reward that leaves a block day without a package.
+    is UpdateLootResult.NotEnoughPackages -> packageShortageMessage("Nach dieser Änderung hätte das laufende Event nur", filled, needed, mode = null) {
+        error("Lege zuerst ein weiteres Paket an und befülle es.")
+    }
+    UpdateLootResult.AlreadyHandedOut ->
+        errorMessage("Spieler haben dieses Paket schon auf der Map gefunden, es kann keine NPC-Belohnung mehr werden.")
     UpdateLootResult.NpcRewardNeedsFixedDay ->
         errorMessage("Die NPC-Belohnung braucht einen festen Tag: ab diesem Tag gibt der NPC sie aus.")
     UpdateLootResult.NpcRewardTaken -> errorMessage("Ein anderes Paket dieses Events ist schon die NPC-Belohnung.")
